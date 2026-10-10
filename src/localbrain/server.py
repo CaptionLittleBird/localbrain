@@ -15,6 +15,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 
 from .agent import build_agent, stream_answer
 from .citations import CitationLinker, strip_links
+from .history import ToolHistory
 from .config import get_settings
 from .retrieval import Retriever
 from .store import Registry, VectorStore
@@ -36,8 +37,10 @@ async def lifespan(app: FastAPI):
     registry = Registry(settings.db_path)
     app.state.registry = registry
     store = VectorStore(settings.qdrant_url, settings.collection)
+    app.state.store = store
     retriever = Retriever(settings, store)  # 启动时就加载向量和重排模型，第一次提问不用等
     app.state.agent = build_agent(settings, retriever, registry, store)
+    app.state.history = ToolHistory()
     yield
 
 
@@ -117,18 +120,29 @@ def _text_content(content) -> str:
 
 
 async def _answer(request: Request, messages: list[BaseMessage]) -> AsyncIterator[str]:
+    history: ToolHistory = request.app.state.history
+    # 接回上一轮的检索结果，追问时不用重新查
+    full, reused = history.restore(messages)
+    if reused:
+        log.info("接回了上一轮的检索结果")
     # 出处 [文件名 p.12] 换成链接，点开直接看原文
     linker = CitationLinker(request.app.state.registry.all(), get_settings().public_url)
+    steps: list[BaseMessage] = []
+    sent: list[str] = []
     try:
-        async for text in stream_answer(request.app.state.agent, messages):
+        async for text in stream_answer(request.app.state.agent, full, steps):
             if out := linker.feed(text):
+                sent.append(out)
                 yield out
     except Exception as e:
         log.exception("回答失败")
         yield linker.flush() + f"\n\n出错了：{type(e).__name__}: {e}"
         return
     if rest := linker.flush():
+        sent.append(rest)
         yield rest
+    # 下一轮 Open WebUI 发回来的历史里，这条回答的出处链接会被 to_langchain_messages 还原，这里也一样还原再记
+    history.remember(messages, strip_links("".join(sent)), steps)
 
 
 async def _sse(texts: AsyncIterator[str], completion_id: str, created: int) -> AsyncIterator[str]:

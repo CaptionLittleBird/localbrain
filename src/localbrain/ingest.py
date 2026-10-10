@@ -132,6 +132,7 @@ class Ingestor:
                 continue
             if job:
                 jobs.append(job)
+        jobs = self._skip_duplicates(jobs)
         if jobs:
             self._ingest_all(jobs)
         return deferred
@@ -183,7 +184,9 @@ class Ingestor:
         if not force and rec and rec.status != "indexing":
             # 失败过的文件也跳过，等文件变了或 ingest --force 再重试
             if rec.size == stat.st_size and rec.mtime == stat.st_mtime:
-                return None
+                # 重复的文件要看原件还在不在：原件删了或改了，就轮到它入库
+                if rec.status != "duplicate" or self._original(rec.sha256, doc_id):
+                    return None
             sha = _sha256(path)
             if rec.sha256 == sha and rec.status == "ok":
                 rec.size, rec.mtime = stat.st_size, stat.st_mtime
@@ -193,6 +196,25 @@ class Ingestor:
             sha = _sha256(path)
         rel = path.relative_to(self.docs_dir).as_posix()
         return Job(doc_id, path, rel, stat.st_size, stat.st_mtime, sha)
+
+    def _original(self, sha256: str, doc_id: str) -> str | None:
+        """内容完全相同、已经入库的另一篇文档的路径。"""
+        return next((r.path for r in self.registry.by_sha(sha256) if r.status == "ok" and r.doc_id != doc_id), None)
+
+    def _skip_duplicates(self, jobs: list[Job]) -> list[Job]:
+        """内容和已入库文档（或这批里排在前面的文件）完全相同的不再入库：省时间，检索结果也不会重复。"""
+        kept: list[Job] = []
+        seen: dict[str, str] = {}
+        for job in jobs:
+            original = self._original(job.sha256, job.doc_id) or seen.get(job.sha256)
+            if original is None:
+                seen[job.sha256] = job.rel
+                kept.append(job)
+                continue
+            log.info("跳过重复文件：%s 和 %s 内容完全相同", job.rel, original)
+            self.store.delete_doc(job.doc_id)
+            self.registry.upsert(self._record(job, 0, "duplicate", f"和「{original}」内容完全相同，没有重复入库"))
+        return kept
 
     def _ingest_all(self, jobs: list[Job]) -> None:
         workers = min(self.settings.ingest_workers, len(jobs))

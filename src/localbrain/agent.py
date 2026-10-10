@@ -5,7 +5,7 @@ import logging
 from collections.abc import AsyncIterator
 from datetime import date
 
-from langchain_core.messages import AIMessageChunk, BaseMessage, SystemMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import START, MessagesState, StateGraph
@@ -28,7 +28,7 @@ SYSTEM_PROMPT = """你是 localbrain，用户的个人知识库助手，基于�
 
 回答要求：
 - 先给结论再展开。
-- 引用知识库内容时在句末标注出处，格式为 [文件名 p.页码]，没有页码就写 [文件名]。文件名照抄检索结果里"文件："后面的内容，不要缩写；出处会自动变成可以点开原文的链接，你不用自己写链接。
+- 引用知识库内容时在句末标注出处：有页码写 [文件名 p.页码]；没有页码写 [文件名 § 章节]，章节取检索结果里"章节："后面最后一级的标题；都没有就写 [文件名]。文件名照抄检索结果里"文件："后面的内容，不要缩写。出处会自动变成可以点开原文的链接，你不用自己写链接。
 - 知识库里查不到就明确说"知识库中没有找到相关内容"。可以补充你的一般知识，但要说明这部分不是来自知识库。"""
 
 
@@ -97,8 +97,13 @@ def build_agent(settings: Settings, retriever: Retriever, registry: Registry, st
     return graph.compile()
 
 
-async def stream_answer(agent, messages: list[BaseMessage]) -> AsyncIterator[str]:
-    """把 Agent 的执行过程转成给人看的文本流：工具调用显示成引用行，模型回答逐字输出。"""
+async def stream_answer(
+    agent, messages: list[BaseMessage], steps: list[BaseMessage] | None = None
+) -> AsyncIterator[str]:
+    """把 Agent 的执行过程转成给人看的文本流：工具调用显示成引用行，模型回答逐字输出。
+
+    传了 steps 的话，中间的工具调用和工具结果会依次追加进去（不含最后的回答），供下一轮复用。
+    """
     async for mode, data in agent.astream(
         {"messages": messages}, {"recursion_limit": 25}, stream_mode=["messages", "updates"]
     ):
@@ -113,7 +118,13 @@ async def stream_answer(agent, messages: list[BaseMessage]) -> AsyncIterator[str
                 yield chunk.content
         elif mode == "updates":
             for node, update in data.items():
-                if node != "agent" or not update:
+                if not update:
+                    continue
+                if steps is not None:
+                    steps.extend(
+                        m for m in update.get("messages", []) if not (isinstance(m, AIMessage) and not m.tool_calls)
+                    )
+                if node != "agent":
                     continue
                 for msg in update.get("messages", []):
                     for call in getattr(msg, "tool_calls", None) or []:

@@ -53,9 +53,11 @@ src/localbrain/
   server.py      OpenAI 兼容接口
   web.py         文档管理页面的接口（页面本身是 kb.html）
   citations.py   把回答里的出处换成打开原文的链接
+  history.py     多轮对话时接回上一轮的检索结果
   cli.py         命令行
 scripts/macos/   launchd 服务安装脚本
-eval/            检索评估问题集示例
+eval/            检索评估问题集
+tests/           单元测试
 ```
 
 ## uv 用法（对照 pip）
@@ -195,7 +197,7 @@ bash scripts/macos/install-services.sh
 
 浏览器打开 `http://<Mac 的名字>.local:3000`（端口以 `WEBUI_PORT` 为准）。第一个注册的账号就是管理员，建好之后在管理员设置里关掉新用户注册。在外面用手机访问的话，Mac 和手机都装上 Tailscale，然后用 Tailscale 分配的地址访问。
 
-文档管理页面在 `http://127.0.0.1:8800/kb`（端口以 `API_PORT` 为准），用 `WEB_PASSWORD` 登录，可以上传、删除文档，查看入库状态和失败原因，在线打开原文。回答里的出处 `[文件名 p.12]` 会自动变成链接，点开直接看原文，PDF 跳到对应页（没登录的话先登录，登录后自动跳回去）。想在其他设备上用，把 `API_HOST` 改成 `0.0.0.0`，这时 `LOCALBRAIN_API_KEY` 也会暴露在局域网上，务必换成随机字符串（换了之后要在 Open WebUI 管理员设置 → 外部连接里同步修改）。出处链接的地址默认是 `http://<本机名>.local:8800`，用 Tailscale 在外面访问时把 `PUBLIC_URL` 设成 Tailscale 的地址。
+文档管理页面在 `http://127.0.0.1:8800/kb`（端口以 `API_PORT` 为准），用 `WEB_PASSWORD` 登录，可以上传、删除文档，查看入库状态和失败原因，在线打开原文。回答里的出处会自动变成链接，点开直接看原文（没登录的话先登录，登录后自动跳回去）：PDF 的 `[文件名 p.12]` 跳到对应页；EPUB、Word 等没有页码的格式写成 `[文件名 § 章节]`，打开阅读页定位到那一节，左边有章节目录可以前后翻。多轮对话时，上一轮查到的内容会接回给模型，追问不用从头检索。想在其他设备上用，把 `API_HOST` 改成 `0.0.0.0`，这时 `LOCALBRAIN_API_KEY` 也会暴露在局域网上，务必换成随机字符串（换了之后要在 Open WebUI 管理员设置 → 外部连接里同步修改）。出处链接的地址默认是 `http://<本机名>.local:8800`，用 Tailscale 在外面访问时把 `PUBLIC_URL` 设成 Tailscale 的地址。
 
 ## 日常使用
 
@@ -206,7 +208,7 @@ bash scripts/macos/install-services.sh
 | 重试失败的文档 | 页面上点「重试」，或 `uv run localbrain ingest --force` |
 | 重新入库 | `uv run localbrain ingest --force` |
 | 调检索效果 | `uv run localbrain search "问题" -k 10` |
-| 评估命中率 | 参照 `eval/questions.example.jsonl` 写 30~50 个真实问题，运行 `uv run localbrain eval 你的文件.jsonl` |
+| 评估命中率 | `uv run localbrain eval eval/questions.jsonl`。每行一个问题，`expected` 是期望命中的文件名关键字，可选的 `pages` 是答案所在页码范围，精确到页判断命中。改检索参数、换模型前后各跑一次对比 |
 | 换向量模型或 `EMBED_BACKEND` | 改完后执行 `uv run localbrain reset --yes`，再重新入库 |
 | 看日志 | `tail -f ~/Library/Logs/localbrain/serve.log` |
 
@@ -223,6 +225,8 @@ bash scripts/macos/install-services.sh
 | 其他文本：.txt .md .markdown .adoc .asciidoc .tex | |
 | 图片：.png .jpg .jpeg .tif .tiff .bmp .webp | OCR 识别文字，只在 macOS 上可用 |
 | .xls .ppt（老版 Office） | 需要安装 LibreOffice：`brew install --cask libreoffice`。没装的话入库会失败并提示原因 |
+
+内容完全相同的文件（比如同一本书拷了两份）只入库一份，另一份在文档管理页面显示为「重复」；原件删除后会自动改用它。同一本书的 PDF 和 EPUB 都入库的话，检索结果会去掉内容几乎一样的片段，不会重复占名额。
 
 MOBI、AZW3 等 Kindle 格式不支持，可以用 Calibre 批量转成 EPUB：`ebook-convert 书名.azw3 书名.epub`。
 
@@ -245,6 +249,16 @@ uv run modelscope download ds4sd/docling-models \
 然后在 `.env` 里设置 `DOCLING_ARTIFACTS_PATH=data/models/docling`。目录名必须和上面一致，Docling 按这个名字查找模型。
 
 > 魔搭上这两个模型的权重文件和 HuggingFace 上 Docling 使用的版本 sha256 一致，是同一份模型。
+
+## 开发
+
+```bash
+uv sync                  # 包含 pytest 等开发依赖
+uv run pytest            # 单元测试，不需要模型和外部服务，十几秒跑完
+uv run localbrain eval eval/questions.jsonl   # 检索效果评估，需要 oMLX 和 Qdrant
+```
+
+`eval/questions.jsonl` 是按《鸟哥的 Linux 私房菜》出的 68 个问题。当前结果：第 1 条命中 88%，前 3 条命中 96%，平均每次检索 2.3 秒。
 
 ## 备份
 

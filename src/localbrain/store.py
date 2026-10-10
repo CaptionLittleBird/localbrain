@@ -26,7 +26,7 @@ class DocRecord:
     mtime: float
     sha256: str
     num_chunks: int
-    status: str  # ok / error
+    status: str  # ok / error / indexing（写到一半）/ duplicate（和另一篇内容完全相同，没入库）
     error: str
     updated_at: float
 
@@ -75,6 +75,13 @@ class Registry:
 
     def all(self) -> list[DocRecord]:
         return self._query("SELECT * FROM documents ORDER BY path")
+
+    def by_sha(self, sha256: str) -> list[DocRecord]:
+        return self._query("SELECT * FROM documents WHERE sha256 = ?", (sha256,))
+
+    def by_path(self, path: str) -> DocRecord | None:
+        rows = self._query("SELECT * FROM documents WHERE path = ?", (path,))
+        return rows[0] if rows else None
 
     def search(self, keyword: str, limit: int = 100) -> list[DocRecord]:
         return self._query(
@@ -204,6 +211,18 @@ class VectorStore:
         )
         points, _ = self.client.scroll(self.collection, scroll_filter=flt, limit=count, with_payload=True)
         return sorted((_to_hit(p.payload) for p in points), key=lambda h: h.chunk_index)
+
+    def doc_chunks(self, doc_id: str) -> list[Hit]:
+        """一篇文档的全部片段（不含向量），按顺序排好。"""
+        hits: list[Hit] = []
+        offset = None
+        while True:
+            points, offset = self.client.scroll(
+                self.collection, scroll_filter=_doc_filter(doc_id), limit=1000, offset=offset, with_payload=True
+            )
+            hits.extend(_to_hit(p.payload) for p in points)
+            if offset is None:
+                return sorted(hits, key=lambda h: h.chunk_index)
 
     def count(self) -> int:
         return self.client.count(self.collection, exact=True).count

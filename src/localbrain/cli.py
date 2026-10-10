@@ -91,7 +91,7 @@ def _retriever(settings: Settings):
 def _status(settings: Settings) -> None:
     from .store import Registry
 
-    labels = {"ok": "正常", "error": "失败", "indexing": "入库中"}
+    labels = {"ok": "正常", "error": "失败", "indexing": "入库中", "duplicate": "重复"}
     docs = Registry(settings.db_path).all()
     failed = [d for d in docs if d.status == "error"]
     for d in docs:
@@ -114,16 +114,39 @@ async def _ask(settings: Settings, question: str) -> None:
 
 
 def _eval(settings: Settings, file: Path, k: int) -> None:
+    """每行 {"question": ..., "expected": "文件名里的关键字", "pages": [起始页, 结束页]}，pages 可省略。
+
+    检索结果的文件名含 expected、页码和 pages 有重叠（前后放宽 1 页）就算命中。
+    """
+    import time
+
     rows = [json.loads(line) for line in file.read_text(encoding="utf-8").splitlines() if line.strip()]
     retriever = _retriever(settings)
-    found = 0
+    ranks: list[int | None] = []
+    seconds = 0.0
     for row in rows:
-        paths = [h.path for h in retriever.search(row["question"], top_k=k)]
-        if any(row["expected"] in p for p in paths):
-            found += 1
-        else:
-            print(f"未命中：{row['question']}\n  期望：{row['expected']}\n  实际：{paths[:3]}")
-    print(f"\nrecall@{k} = {found}/{len(rows)} = {found / max(len(rows), 1):.0%}")
+        started = time.time()
+        hits = retriever.search(row["question"], top_k=k)
+        seconds += time.time() - started
+        rank = next((i for i, h in enumerate(hits, start=1) if _eval_hit(row, h)), None)
+        ranks.append(rank)
+        if rank is None:
+            got = [f"{h.path} p.{h.page_start}" if h.page_start else h.path for h in hits[:3]]
+            print(f"未命中：{row['question']}\n  期望：{row['expected']} {row.get('pages', '')}\n  实际：{got}")
+    n = max(len(rows), 1)
+    recall = {c: sum(1 for r in ranks if r and r <= c) / n for c in sorted({1, 3, k})}
+    mrr = sum(1 / r for r in ranks if r) / n
+    print("\n" + "  ".join(f"recall@{c} = {v:.0%}" for c, v in recall.items()) + f"  MRR = {mrr:.3f}")
+    print(f"共 {len(rows)} 题，平均每次检索 {seconds / n:.2f}s（召回 {settings.candidates} 条）")
+
+
+def _eval_hit(row: dict, hit) -> bool:
+    if row["expected"] not in hit.path:
+        return False
+    pages = row.get("pages")
+    if not pages or hit.page_start is None:
+        return True
+    return hit.page_start <= pages[1] + 1 and hit.page_end >= pages[0] - 1
 
 
 def _reset(settings: Settings, confirmed: bool) -> None:

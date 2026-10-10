@@ -75,6 +75,8 @@
   .s-ok { background: var(--ok-soft); color: var(--ok); }
   .s-error { background: var(--err-soft); color: var(--err); }
   .s-pending, .s-indexing, .s-removing { background: var(--warn-soft); color: var(--warn); }
+  .s-duplicate { background: var(--line); color: var(--muted); }
+  .doc .err.dup { color: var(--muted); }
   .empty { text-align: center; padding: 30px 0; }
   @media (max-width: 560px) {
     .doc { grid-template-columns: 1fr; }
@@ -135,7 +137,7 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const STATUS = { ok: "已入库", error: "失败", indexing: "入库中", pending: "等待入库", removing: "移除中" };
+const STATUS = { ok: "已入库", error: "失败", indexing: "入库中", pending: "等待入库", removing: "移除中", duplicate: "重复" };
 const BUSY = new Set(["indexing", "pending", "removing"]);
 let docs = [], filter = "all", uploading = 0, timer = null;
 const firstSeenPending = new Map();
@@ -212,7 +214,7 @@ function render() {
   for (const d of docs) {
     if (d.status === "ok") counts.ok++;
     else if (d.status === "error") counts.error++;
-    else counts.busy++;
+    else if (BUSY.has(d.status)) counts.busy++;
   }
   const chip = (key, label) => h("button", {
     class: "chip" + (filter === key ? " active" : ""),
@@ -248,7 +250,7 @@ function row(d) {
         : h("a", { href: "api/raw?path=" + encodeURIComponent(d.path), target: "_blank", rel: "noopener" }, name),
       h("div", { class: "muted small" }, [folder, meta].filter(Boolean).join("  ·  "))),
     h("div", { class: "side" }, h("span", { class: "badge s-" + d.status }, STATUS[d.status] || d.status), ...actions),
-    d.error ? h("div", { class: "err" }, d.error) : null);
+    d.error ? h("div", { class: d.status === "duplicate" ? "err dup" : "err" }, d.error) : null);
 }
 
 async function retry(d) {

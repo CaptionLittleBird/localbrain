@@ -8,7 +8,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import html
 import os
+import re
 import uuid
 from pathlib import Path
 from urllib.parse import quote
@@ -126,7 +128,7 @@ def list_docs(request: Request) -> dict:
             "size": stat.st_size,
             "status": status,
             "chunks": rec.num_chunks if rec and status == "ok" else 0,
-            "error": rec.error if rec and status == "error" else "",
+            "error": rec.error if rec and status in ("error", "duplicate") else "",
             "updated_at": rec.updated_at if rec else stat.st_mtime,
         })
     for rec in records.values():  # 文件已删、记录还在：等 watch 从向量库移除
@@ -185,18 +187,154 @@ def retry(path: str) -> dict:
     return {"ok": True}
 
 
+def _to_login(request: Request) -> RedirectResponse:
+    return RedirectResponse(f"/kb?next={quote(request.url.path + '?' + request.url.query, safe='')}")
+
+
 @router.get("/open", include_in_schema=False)
-def open_source(request: Request, path: str, page: int | None = None) -> RedirectResponse:
-    """回答里出处链接指向这里：已登录就打开原文（PDF 跳到对应页），没登录先去登录页，登录后再回来。"""
+def open_source(request: Request, path: str, page: int | None = None, section: str = "") -> RedirectResponse:
+    """回答里出处链接指向这里：PDF 打开原文跳到对应页，其他格式打开阅读页定位到章节。没登录先去登录页，登录后再回来。"""
     if not _logged_in(request):
-        return RedirectResponse(f"/kb?next={quote(request.url.path + '?' + request.url.query, safe='')}")
+        return _to_login(request)
     target = _resolve(path)
     if not target.is_file():
         raise HTTPException(404, f"文件不存在（可能已删除或改名）：{path}")
-    url = f"/kb/api/raw?path={quote(path)}"
-    if page and target.suffix.lower() == ".pdf":
-        url += f"#page={page}"  # 浏览器自带的 PDF 阅读器认这个
+    if target.suffix.lower() == ".pdf" and (page or not section):
+        return RedirectResponse(f"/kb/api/raw?path={quote(path)}" + (f"#page={page}" if page else ""))
+    url = f"/kb/view?path={quote(path)}"
+    if page:
+        url += f"&page={page}"
+    if section:
+        url += f"&section={quote(section)}"
     return RedirectResponse(url)
+
+
+_NOT_WORD = re.compile(r"[\W_]+")
+_MAX_SHOWN = 80
+
+
+def _norm(text: str) -> str:
+    return _NOT_WORD.sub("", text).lower()
+
+
+def _pick_section(headings: list[str], section: str) -> str | None:
+    """模型引用的章节可能是完整路径，也可能只有最后一级，按从严到宽的顺序找。"""
+    key = _norm(section)
+    if not key:
+        return None
+    for match in (
+        lambda h: _norm(h) == key,
+        lambda h: _norm(h.split(" > ")[-1]) == key,
+        lambda h: _norm(h).endswith(key),
+        lambda h: key in _norm(h),
+    ):
+        found = [h for h in headings if match(h)]
+        if found:
+            return found[0]
+    return None
+
+
+@router.get("/view", response_class=HTMLResponse, include_in_schema=False)
+def view(request: Request, path: str, page: int | None = None, section: str = ""):
+    """阅读页：按章节显示入库后的原文，左边是章节目录。给 EPUB、Word 这类没有页码的格式用。"""
+    if not _logged_in(request):
+        return _to_login(request)
+    rec = _registry(request).by_path(path)
+    if rec is None or rec.status != "ok":
+        raise HTTPException(404, f"知识库里没有这篇文档：{path}")
+    chunks = request.app.state.store.doc_chunks(rec.doc_id)
+    headings = list(dict.fromkeys(c.heading for c in chunks))  # 按出现顺序去重
+    note = ""
+    if page:
+        shown = [c for c in chunks if c.page_start is not None and c.page_start <= page <= (c.page_end or c.page_start)]
+        current = shown[0].heading if shown else None
+        title = f"第 {page} 页"
+    else:
+        current = _pick_section(headings, section) if section else None
+        if section and current is None:
+            note = f"没找到章节「{section}」，先显示文档开头，可以从目录里找。"
+        current = current if current is not None else (headings[0] if headings else "")
+        shown = [c for c in chunks if c.heading == current]
+        title = current or "正文"
+    if not shown:
+        note = note or "没找到对应的内容，先显示文档开头。"
+        shown = chunks[:5]
+    if len(shown) > _MAX_SHOWN:  # 没有标题的长文档整篇都算一节，只显示前面一部分
+        note = (note + " " if note else "") + f"这一节共 {len(shown)} 段，只显示前 {_MAX_SHOWN} 段，完整内容请打开原文件。"
+        shown = shown[:_MAX_SHOWN]
+    idx = headings.index(current) if current in headings else -1
+    return HTMLResponse(_render_view(rec.path, title, note, shown, headings, idx))
+
+
+def _toc(headings: list[str]) -> list[tuple[str, str]]:
+    """目录条目 (标题路径, 点击后打开的章节)。只有小节没有正文的上级标题（比如"第二章"直接接"2.1"）
+    也列出来，点它打开下面第一个有内容的小节。"""
+    entries: dict[str, str] = {}
+    for h in headings:
+        parts = h.split(" > ")
+        for depth in range(1, len(parts) + 1):
+            entries.setdefault(" > ".join(parts[:depth]), h)
+    return list(entries.items())
+
+
+def _render_view(path: str, title: str, note: str, shown, headings: list[str], idx: int) -> str:
+    e = html.escape
+    link = lambda h: f"/kb/view?path={quote(path)}&section={quote(h)}"  # noqa: E731
+    current = headings[idx] if idx >= 0 else None
+    toc = "".join(
+        f'<li class="{"cur" if label == current else ""}" style="padding-left:{label.count(" > ") * 12}px">'
+        f'<a href="{e(link(target))}">{e(label.split(" > ")[-1] or "（开头）")}</a></li>'
+        for label, target in _toc(headings)
+    )
+    nav = []
+    if idx > 0:
+        nav.append(f'<a href="{e(link(headings[idx - 1]))}">← 上一节</a>')
+    if 0 <= idx < len(headings) - 1:
+        nav.append(f'<a href="{e(link(headings[idx + 1]))}">下一节 →</a>')
+    body = "".join(f'<div class="chunk">{e(c.text)}</div>' for c in shown)
+    return _VIEW_PAGE.format(
+        name=e(path.rsplit("/", 1)[-1]), path=e(path), raw=e(f"/kb/api/raw?path={quote(path)}"),
+        title=e(title), note=f'<p class="note">{e(note)}</p>' if note else "", body=body, toc=toc,
+        nav=" ".join(nav),
+    )
+
+
+_VIEW_PAGE = """<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{name}</title>
+<style>
+  :root {{ --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7385; --line:#e3e6ec; --accent:#2f6fed; --hl:#e8effe; --warn:#a86400; }}
+  @media (prefers-color-scheme: dark) {{ :root {{ --bg:#14171c; --card:#1c2027; --text:#e6e8ec; --muted:#9098a8; --line:#2c323c; --accent:#6b9bff; --hl:#1f2b44; --warn:#e7a94a; }} }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin:0; background:var(--bg); color:var(--text); font:15px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }}
+  .wrap {{ display:grid; grid-template-columns: 280px 1fr; gap:20px; max-width:1200px; margin:0 auto; padding:20px 16px; }}
+  aside {{ position:sticky; top:16px; align-self:start; max-height:calc(100vh - 32px); overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; font-size:13px; }}
+  aside ul {{ list-style:none; margin:0; padding:0; }}
+  aside li {{ margin:2px 0; }}
+  aside li.cur a {{ color:var(--accent); font-weight:600; }}
+  a {{ color:var(--text); text-decoration:none; }} a:hover {{ color:var(--accent); }}
+  main {{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:20px 24px; min-width:0; }}
+  .meta {{ color:var(--muted); font-size:13px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }}
+  .meta a {{ color:var(--accent); }}
+  h1 {{ font-size:20px; margin:8px 0 16px; }}
+  .chunk {{ white-space:pre-wrap; word-break:break-word; margin-bottom:14px; }}
+  .note {{ color:var(--warn); font-size:13px; }}
+  .nav {{ display:flex; justify-content:space-between; margin-top:20px; padding-top:12px; border-top:1px solid var(--line); }}
+  .nav a {{ color:var(--accent); }}
+  @media (max-width: 760px) {{ .wrap {{ grid-template-columns:1fr; }} aside {{ position:static; max-height:240px; }} }}
+</style></head>
+<body><div class="wrap">
+<aside><ul>{toc}</ul></aside>
+<main>
+  <div class="meta"><span>{path}</span><a href="{raw}" target="_blank" rel="noopener">打开原文件</a></div>
+  <h1>{title}</h1>
+  {note}
+  {body}
+  <div class="nav">{nav}</div>
+</main>
+</div>
+<script>document.querySelector("aside li.cur")?.scrollIntoView({{block: "center"}});</script>
+</body></html>"""
 
 
 @router.get("/api/raw", dependencies=[Depends(require_login)])

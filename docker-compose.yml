@@ -1,9 +1,11 @@
 # 只放不需要 GPU 的服务：向量库和聊天界面。
 # 模型和 API 服务在宿主机上原生运行（才能用上 Mac 的 GPU），见 README。
 # 端口都在 .env 里配置：QDRANT_PORT、WEBUI_PORT、API_PORT。
+# 镜像固定版本：latest / main 会在 docker compose pull 时悄悄升级，Open WebUI 的 main 还是开发版。
+# 升级时改这里的版本号，再 docker compose up -d。Open WebUI 升级会迁移数据库，升级前先备份 open_webui_data 卷。
 services:
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.19.2
     restart: unless-stopped
     ports:
       - "127.0.0.1:${QDRANT_PORT:-6333}:6333" # 只对本机开放
@@ -11,7 +13,7 @@ services:
       - qdrant_data:/qdrant/storage
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:v0.11.4
     restart: unless-stopped
     ports:
       - "${WEBUI_PORT:-3000}:8080" # 浏览器访问 http://<主机>:WEBUI_PORT

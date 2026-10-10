@@ -1,0 +1,68 @@
+{"question": "硬盘的 GPT 分区表和 MBR 相比有什么优势？", "expected": "鸟哥的Linux私房菜", "pages": [83, 91]}
+{"question": "UEFI 开机和传统 BIOS 开机有什么不同？", "expected": "鸟哥的Linux私房菜", "pages": [91, 95]}
+{"question": "安装 Linux 时硬盘应该怎么分区比较合理？", "expected": "鸟哥的Linux私房菜", "pages": [95, 102]}
+{"question": "在命令行里按哪个键可以自动补全命令或文件名？", "expected": "鸟哥的Linux私房菜", "pages": [179, 182]}
+{"question": "怎么查一个指令的使用手册？man 页面里括号中的数字是什么意思？", "expected": "鸟哥的Linux私房菜", "pages": [184, 191]}
+{"question": "ls -l 输出最前面那十个字符分别代表什么？", "expected": "鸟哥的Linux私房菜", "pages": [207, 212]}
+{"question": "怎么修改文件的拥有者和所属群组？", "expected": "鸟哥的Linux私房菜", "pages": [212, 216]}
+{"question": "目录的 x 执行权限有什么作用？", "expected": "鸟哥的Linux私房菜", "pages": [216, 221]}
+{"question": "FHS 标准里 /var 和 /usr 目录应该放什么内容？", "expected": "鸟哥的Linux私房菜", "pages": [223, 230]}
+{"question": "新建文件的默认权限是由什么决定的？", "expected": "鸟哥的Linux私房菜", "pages": [262, 264]}
+{"question": "怎么让一个文件连 root 都没法删除或修改？", "expected": "鸟哥的Linux私房菜", "pages": [264, 265]}
+{"question": "SUID 是什么？为什么普通用户执行 passwd 能改 /etc/shadow？", "expected": "鸟哥的Linux私房菜", "pages": [265, 269]}
+{"question": "which、whereis、locate 查找文件有什么区别？", "expected": "鸟哥的Linux私房菜", "pages": [270, 276]}
+{"question": "怎么找出系统里所有大于 1MB 的文件？", "expected": "鸟哥的Linux私房菜", "pages": [271, 276]}
+{"question": "inode 和 block 是什么关系？", "expected": "鸟哥的Linux私房菜", "pages": [284, 291]}
+{"question": "硬链接和软链接有什么区别？", "expected": "鸟哥的Linux私房菜", "pages": [305, 311]}
+{"question": "怎么查看磁盘剩余空间以及某个目录占了多大？", "expected": "鸟哥的Linux私房菜", "pages": [301, 305]}
+{"question": "怎么把一块新硬盘格式化成 xfs 文件系统？", "expected": "鸟哥的Linux私房菜", "pages": [320, 325]}
+{"question": "开机自动挂载在哪个文件里配置？每个字段是什么意思？", "expected": "鸟哥的Linux私房菜", "pages": [336, 339]}
+{"question": "ISO 镜像文件不刻录光盘能直接挂载使用吗？怎么做？", "expected": "鸟哥的Linux私房菜", "pages": [339, 342]}
+{"question": "内存不够用了，怎么用一个文件来增加 swap 交换空间？", "expected": "鸟哥的Linux私房菜", "pages": [344, 345]}
+{"question": "tar 怎么打包一个目录并用 bzip2 压缩？怎么解压到指定目录？", "expected": "鸟哥的Linux私房菜", "pages": [359, 367]}
+{"question": "gzip、bzip2、xz 这三种压缩方式哪个压缩率最高？", "expected": "鸟哥的Linux私房菜", "pages": [355, 358]}
+{"question": "怎么用 dd 把整个分区备份成一个文件？", "expected": "鸟哥的Linux私房菜", "pages": [382, 385]}
+{"question": "vim 里怎么批量查找替换文本？", "expected": "鸟哥的Linux私房菜", "pages": [394, 398]}
+{"question": "vim 异常退出后留下的 .swp 暂存文件该怎么处理？", "expected": "鸟哥的Linux私房菜", "pages": [400, 402]}
+{"question": "Windows 上写的文本放到 Linux 里每行末尾多了 ^M，怎么转换？", "expected": "鸟哥的Linux私房菜", "pages": [413, 415]}
+{"question": "环境变量和自定义变量有什么区别？export 是干什么的？", "expected": "鸟哥的Linux私房菜", "pages": [432, 440]}
+{"question": "怎么给常用的长命令设置一个简短的别名？", "expected": "鸟哥的Linux私房菜", "pages": [450, 451]}
+{"question": "登录时 bash 会读取哪些配置文件？/etc/profile 和 ~/.bashrc 的先后顺序是什么？", "expected": "鸟哥的Linux私房菜", "pages": [456, 461]}
+{"question": "怎么把命令的错误信息丢掉不显示？", "expected": "鸟哥的Linux私房菜", "pages": [466, 470]}
+{"question": "&& 和 || 怎么根据上一条命令是否成功来决定执行下一条？", "expected": "鸟哥的Linux私房菜", "pages": [470, 472]}
+{"question": "怎么统计一个文件有多少行、多少字？", "expected": "鸟哥的Linux私房菜", "pages": [476, 478]}
+{"question": "xargs 命令有什么用？", "expected": "鸟哥的Linux私房菜", "pages": [484, 486]}
+{"question": "用 sed 怎么删除文件的第 2 到第 5 行？", "expected": "鸟哥的Linux私房菜", "pages": [503, 508]}
+{"question": "awk 怎么打印每一行的第一列和第三列？", "expected": "鸟哥的Linux私房菜", "pages": [511, 515]}
+{"question": "/etc/passwd 文件每一行的各个字段代表什么？", "expected": "鸟哥的Linux私房菜", "pages": [563, 569]}
+{"question": "怎么让普通用户通过 sudo 执行管理员命令？", "expected": "鸟哥的Linux私房菜", "pages": [602, 607]}
+{"question": "不改变文件拥有者，怎么单独给某个用户一个目录的读写权限？", "expected": "鸟哥的Linux私房菜", "pages": [593, 599]}
+{"question": "怎么限制每个用户在家目录最多只能用 1GB 空间？", "expected": "鸟哥的Linux私房菜", "pages": [627, 640]}
+{"question": "RAID 0、RAID 1、RAID 5 有什么区别？", "expected": "鸟哥的Linux私房菜", "pages": [641, 645]}
+{"question": "LVM 逻辑卷空间不够了怎么扩容？", "expected": "鸟哥的Linux私房菜", "pages": [662, 664]}
+{"question": "怎么设置每天凌晨两点自动执行一个脚本？", "expected": "鸟哥的Linux私房菜", "pages": [683, 690]}
+{"question": "关机期间错过的定时任务，开机后怎么补执行？", "expected": "鸟哥的Linux私房菜", "pages": [690, 693]}
+{"question": "怎么把正在运行的程序丢到后台，之后再调回前台？", "expected": "鸟哥的Linux私房菜", "pages": [701, 705]}
+{"question": "退出 SSH 登录后怎么让程序继续运行不被中断？", "expected": "鸟哥的Linux私房菜", "pages": [705, 706]}
+{"question": "怎么查看哪些进程最占 CPU 和内存？", "expected": "鸟哥的Linux私房菜", "pages": [707, 715]}
+{"question": "kill -9 和 kill -15 有什么区别？", "expected": "鸟哥的Linux私房菜", "pages": [715, 717]}
+{"question": "怎么调整一个进程的优先级？nice 值是什么？", "expected": "鸟哥的Linux私房菜", "pages": [717, 720]}
+{"question": "怎么查出某个文件正被哪个进程占用？", "expected": "鸟哥的Linux私房菜", "pages": [729, 733]}
+{"question": "SELinux 的 enforcing 和 permissive 模式有什么区别？怎么临时关闭？", "expected": "鸟哥的Linux私房菜", "pages": [740, 743]}
+{"question": "怎么设置一个服务开机自动启动？", "expected": "鸟哥的Linux私房菜", "pages": [766, 770]}
+{"question": "怎么自己写一个 systemd 服务的配置文件？", "expected": "鸟哥的Linux私房菜", "pages": [780, 790]}
+{"question": "系统日志都放在哪里？/var/log/messages 记录了什么？", "expected": "鸟哥的Linux私房菜", "pages": [802, 804]}
+{"question": "日志文件越来越大，怎么让它自动轮转？", "expected": "鸟哥的Linux私房菜", "pages": [816, 822]}
+{"question": "journalctl 怎么只看某个服务的日志？", "expected": "鸟哥的Linux私房菜", "pages": [823, 825]}
+{"question": "忘记 root 密码了怎么办？", "expected": "鸟哥的Linux私房菜", "pages": [876, 878]}
+{"question": "怎么修改 grub 默认开机的系统和选单等待时间？", "expected": "鸟哥的Linux私房菜", "pages": [858, 864]}
+{"question": "怎么加载和卸载内核模块？", "expected": "鸟哥的Linux私房菜", "pages": [851, 853]}
+{"question": "CentOS 7 防火墙怎么开放一个端口？", "expected": "鸟哥的Linux私房菜", "pages": [889, 896]}
+{"question": "增量备份和差异备份有什么区别？", "expected": "鸟哥的Linux私房菜", "pages": [908, 911]}
+{"question": "用源码 tarball 编译安装软件的一般步骤是什么？", "expected": "鸟哥的Linux私房菜", "pages": [936, 939]}
+{"question": "怎么查看一个程序依赖哪些动态函数库？", "expected": "鸟哥的Linux私房菜", "pages": [946, 947]}
+{"question": "下载的文件怎么校验有没有被篡改？", "expected": "鸟哥的Linux私房菜", "pages": [947, 948]}
+{"question": "怎么查询某个文件是哪个 rpm 软件包安装的？", "expected": "鸟哥的Linux私房菜", "pages": [961, 964]}
+{"question": "yum 的软件源配置文件在哪里？怎么修改？", "expected": "鸟哥的Linux私房菜", "pages": [974, 977]}
+{"question": "怎么查看服务器的 CPU 型号、内存条等硬件信息？", "expected": "鸟哥的Linux私房菜", "pages": [897, 902]}
+{"question": "怎么设置系统的时区和时间？", "expected": "鸟哥的Linux私房菜", "pages": [886, 888]}

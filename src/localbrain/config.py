@@ -63,7 +63,9 @@ class Settings(BaseSettings):
 
     # 切块与检索
     chunk_size: int = 800  # 每块大约多少字符
-    candidates: int = 30  # 混合检索召回多少条交给重排
+    # 混合检索召回多少条交给重排。oMLX 重排是逐条算的，耗时和条数成正比（每条约 0.14 秒）；
+    # 评估集上 15 条和 30 条命中率一样，速度快一倍。文档很多时可以适当调大
+    candidates: int = 15
     top_k: int = 6  # 重排后返回给 Agent 的条数
 
     @field_validator("ocr", mode="before")

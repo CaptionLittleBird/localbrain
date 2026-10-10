@@ -1,4 +1,4 @@
-"""把回答里的出处 [文件名 p.12] 换成链接，点击直接打开原文（PDF 跳到对应页）。
+"""把回答里的出处 [文件名 p.12] / [文件名 § 章节] 换成链接，点击直接看原文：PDF 跳到对应页，其他格式打开对应章节。
 
 回答是流式输出的，一个出处可能被拆在前后两段里，所以按字符扫描：遇到 [ 先攒着，等到 ] 再整体判断。
 文件名对不上知识库里的文档就原样输出，不会误伤代码里的 [root@study ~]# 之类。
@@ -10,7 +10,7 @@ from urllib.parse import quote
 
 from .store import DocRecord
 
-# 方括号里的一段：文件名，可选的页码 p.12 / p.12-15 / 第12页
+# 方括号里的一段：文件名，可选的页码 p.12 / p.12-15 / 第12页；章节写在 § 后面
 _PART = re.compile(r"^(?P<name>.+?)(?:[\s,，]*(?:p\.?|P\.?|第)\s*(?P<page>\d+)(?:\s*[-–~～]\s*\d+)?\s*页?)?$")
 _SEPARATORS = re.compile(r"\s*[；;、]\s*")
 _NOT_WORD = re.compile(r"[\W_]+")
@@ -68,13 +68,16 @@ class CitationLinker:
         parts = [p for p in _SEPARATORS.split(bracket[1:-1].strip()) if p]
         links = []
         for part in parts:
-            m = _PART.match(part)
+            locator, _, section = part.partition("§")
+            m = _PART.match(locator.strip())
             path = self._resolve(m.group("name").strip()) if m else None
             if path is None:
                 return bracket
             url = f"{self.base_url}/kb/open?path={quote(path)}"
             if m.group("page"):
                 url += f"&page={m.group('page')}"
+            if section.strip():
+                url += f"&section={quote(section.strip())}"
             links.append(f"[\\[{_escape(part)}\\]]({url})")
         return "".join(links) if links else bracket
 

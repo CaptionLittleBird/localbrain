@@ -76,9 +76,10 @@ def parse_file(path: Path) -> list[Section]:
     result = _converter(_use_ocr(path, suffix)).convert(source)
     if result.status != ConversionStatus.SUCCESS:
         log.warning("%s 只解析成功了一部分：%s", path.name, "; ".join(e.error_message for e in result.errors))
-    fix = _heading_filter(path) if suffix == ".pdf" else None
+    if suffix == ".pdf":
+        return _split_pages(result.document, _heading_filter(path))
     if suffix in PAGED_SUFFIXES:
-        return _split_pages(result.document, fix)
+        return _export_by_page(result.document)
     return [Section(_clean(result.document.export_to_markdown()))]
 
 
@@ -98,6 +99,14 @@ def _split_pages(doc, fix=None) -> list[Section]:
         log.warning("分页标记和页码对不上（%d 段 / %d 页），这份文档不标注页码", len(parts), len(pages))
         return [Section(_clean("\n\n".join(parts)))]
     return [Section(_clean(text), page=page) for page, text in zip(pages, parts)]
+
+
+def _export_by_page(doc) -> list[Section]:
+    """演示文稿逐页导出。Docling 给演示文稿插的分页标记位置不对（会错开一页），不能用 _split_pages 的办法；
+    幻灯片页数不多，逐页导出也不慢。"""
+    pages = sorted({item.prov[0].page_no for item, _ in doc.iterate_items() if getattr(item, "prov", None)})
+    sections = [Section(_clean(doc.export_to_markdown(page_no=p)), page=p) for p in pages]
+    return [s for s in sections if s.text]
 
 
 def _read_text(path: Path) -> str:
