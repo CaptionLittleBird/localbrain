@@ -208,13 +208,18 @@ bash scripts/macos/install-services.sh
 `PDF_PARSER=docling` 需要两个模型：版面分析模型和表格识别模型。HuggingFace 在国内很慢，hf-mirror 对这类大文件也只是转发回 HuggingFace，起不到加速作用。ModelScope（魔搭）上有同样的模型，可以预先下载：
 
 ```bash
-uv run modelscope download --model ds4sd/docling-layout-heron --local_dir data/models/docling/docling-project--docling-layout-heron
-uv run modelscope download --model ds4sd/docling-models --local_dir data/models/docling/docling-project--docling-models
+# 版面分析模型（约 164MB）
+uv run modelscope download ds4sd/docling-layout-heron \
+  --local-dir data/models/docling/docling-project--docling-layout-heron
+# 表格识别模型，只下 accurate 版（约 203MB）
+uv run modelscope download ds4sd/docling-models \
+  --include "model_artifacts/tableformer/accurate/*" \
+  --local-dir data/models/docling/docling-project--docling-models
 ```
 
 然后在 `.env` 里设置 `DOCLING_ARTIFACTS_PATH=data/models/docling`。目录名必须和上面一致，Docling 按这个名字查找模型。
 
-> 这两个仓库和 Docling 要求的目录结构已经核对过，但还没有实际用它们跑过 PDF 解析，第一次使用时留意日志。
+> 魔搭上这两个模型的权重文件和 HuggingFace 上 Docling 使用的版本 sha256 一致，是同一份模型。
 
 ## 备份
 
