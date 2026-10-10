@@ -185,7 +185,7 @@ uv run localbrain search "随便问一个文档里有的问题"
 bash scripts/macos/install-services.sh
 ```
 
-会注册 `com.localbrain.serve`（API）和 `com.localbrain.watch`（监听文档目录、自动入库）两个服务，进程挂了会自动重启。日志在 `~/Library/Logs/localbrain/`。修改 `.env` 后重新执行这个脚本即可重启服务。
+不要加 sudo，这是当前用户的登录服务。脚本会注册 `com.localbrain.serve`（API）和 `com.localbrain.watch`（监听文档目录、自动入库）两个服务，进程挂了会自动重启。日志在 `~/Library/Logs/localbrain/`。修改 `.env` 后重新执行这个脚本即可重启服务。
 
 **6. 使用**
 
