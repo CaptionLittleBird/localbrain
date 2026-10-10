@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 from . import ROOT
@@ -21,6 +22,7 @@ class Settings(BaseSettings):
     localbrain_api_key: str = "change-me"
     api_host: str = "127.0.0.1"
     api_port: int = 8800
+    web_password: str = ""  # 文档管理页面 /kb 的登录密码；不设置则页面不可用
 
     # 知识库存储
     docs_dir: Path = Path("data/docs")
@@ -46,12 +48,28 @@ class Settings(BaseSettings):
     # 文档解析
     pdf_parser: Literal["docling", "simple"] = "docling"  # simple 只提取文字，不需要模型
     docling_artifacts_path: str = ""  # Docling 模型的本地目录；留空则首次解析 PDF 时自动下载
-    ocr: bool = True  # 扫描版 PDF 的 OCR，仅 macOS 生效（用系统自带的 Vision 框架）
+    # 扫描版 PDF 和图片的 OCR，仅 macOS 生效（用系统自带的 Vision 框架）：
+    #   auto   PDF 有文字层就不 OCR（OCR 占解析时间的八成），缺文字层的页较多才开；图片总是 OCR
+    #   always PDF 里的插图、截图也 OCR，慢 4 倍左右
+    #   never  不 OCR
+    ocr: Literal["auto", "always", "never"] = "auto"
+
+    # 入库
+    ingest_workers: int = 2  # 并行解析的进程数；每个进程占 2～4GB 内存
+    parse_timeout: int = 3600  # 单个文件解析超过这么多秒就放弃，防止卡住整个入库
 
     # 切块与检索
     chunk_size: int = 800  # 每块大约多少字符
     candidates: int = 30  # 混合检索召回多少条交给重排
     top_k: int = 6  # 重排后返回给 Agent 的条数
+
+    @field_validator("ocr", mode="before")
+    @classmethod
+    def _legacy_ocr(cls, v: Any) -> Any:
+        """兼容旧配置 OCR=true / false。"""
+        legacy = {"true": "auto", "1": "auto", "yes": "auto", "on": "auto",
+                  "false": "never", "0": "never", "no": "never", "off": "never"}
+        return legacy.get(str(v).strip().lower(), v)
 
     def model_post_init(self, context: Any, /) -> None:
         self.docs_dir = resolve_path(self.docs_dir)

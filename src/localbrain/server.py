@@ -1,6 +1,7 @@
 """对外接口：OpenAI 兼容的 /v1/chat/completions，Open WebUI 等客户端可以直接接入。"""
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import time
@@ -9,13 +10,14 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from .agent import build_agent, stream_answer
 from .config import get_settings
 from .retrieval import Retriever
 from .store import Registry, VectorStore
+from .web import router as web_router
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +30,10 @@ async def lifespan(app: FastAPI):
     log.info("大模型：%s（%s）", settings.llm_model, settings.llm_base_url)
     if not settings.llm_api_key:
         log.warning("没有配置 LLM_API_KEY，提问会失败。请在 .env 里填写。")
+    if not settings.web_password:
+        log.warning("没有设置 WEB_PASSWORD，文档管理页面 /kb 不可用")
     registry = Registry(settings.db_path)
+    app.state.registry = registry
     store = VectorStore(settings.qdrant_url, settings.collection)
     retriever = Retriever(settings, store)  # 启动时就加载向量和重排模型，第一次提问不用等
     app.state.agent = build_agent(settings, retriever, registry, store)
@@ -36,11 +41,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="localbrain", lifespan=lifespan)
+app.include_router(web_router)
 
 
 def check_api_key(authorization: str = Header(default="")) -> None:
-    if authorization != f"Bearer {get_settings().localbrain_api_key}":
+    expected = f"Bearer {get_settings().localbrain_api_key}"
+    if not hmac.compare_digest(authorization.encode(), expected.encode()):
         raise HTTPException(status_code=401, detail="invalid api key")
+
+
+@app.get("/", include_in_schema=False)
+async def index() -> RedirectResponse:
+    return RedirectResponse("/kb")
 
 
 @app.get("/health")

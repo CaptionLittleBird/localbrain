@@ -6,8 +6,22 @@ from dataclasses import dataclass
 
 from .parsing import Section
 
-_HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
+# 只用无歧义的写法：之前的 r"^(#{1,6})\s+(.+?)\s*#*\s*$" 遇到中间有一长串空格的行会回溯到卡死
+_HEADING = re.compile(r"(#{1,6})[ \t]+(\S.*)")
+_MAX_HEADING_LEN = 200  # 再长就不是标题了，多半是 # 开头的正文或注释
 _SENTENCE_END = re.compile(r"(?<=[。！？；.!?;\n])")
+_FENCE = ("```", "~~~")
+
+
+def _heading(line: str) -> tuple[int, str] | None:
+    """Markdown 标题行 → (级别, 标题文字)，去掉结尾可选的 # 号。"""
+    m = _HEADING.fullmatch(line.rstrip())
+    if not m:
+        return None
+    title = m.group(2).rstrip("#").strip()
+    if not title or len(title) > _MAX_HEADING_LEN:
+        return None
+    return len(m.group(1)), title
 
 
 @dataclass
@@ -38,12 +52,12 @@ def chunk_sections(sections: list[Section], chunk_size: int = 800) -> list[Chunk
 
     for section in sections:
         for block in _blocks(section.text):
-            m = _HEADING.match(block)
-            if m:
+            h = _heading(block)
+            if h:
                 # 遇到新标题就截断，保证一个块不跨章节
                 flush()
-                level = len(m.group(1))
-                headings = [h for h in headings if h[0] < level] + [(level, m.group(2))]
+                level, title = h
+                headings = [x for x in headings if x[0] < level] + [(level, title)]
                 heading = " > ".join(h[1] for h in headings)
                 continue
             for piece in _split_long(block, chunk_size):
@@ -58,20 +72,30 @@ def chunk_sections(sections: list[Section], chunk_size: int = 800) -> list[Chunk
 
 
 def _blocks(text: str) -> list[str]:
-    """按空行分段，标题行单独成段。"""
+    """按空行分段，标题行单独成段。代码块整体算一段，里面 # 开头的行（shell 注释、root 提示符）不当标题。"""
     blocks: list[str] = []
-    for para in re.split(r"\n\s*\n", text):
-        current: list[str] = []
-        for line in para.strip("\n").split("\n"):
-            if _HEADING.match(line):
-                if current:
-                    blocks.append("\n".join(current))
-                    current = []
-                blocks.append(line.strip())
-            else:
-                current.append(line)
+    current: list[str] = []
+    in_fence = False
+
+    def push() -> None:
         if current:
             blocks.append("\n".join(current))
+            current.clear()
+
+    for line in text.split("\n"):
+        if line.lstrip().startswith(_FENCE):
+            in_fence = not in_fence
+            current.append(line)
+        elif in_fence:
+            current.append(line)
+        elif not line.strip():
+            push()
+        elif _heading(line):
+            push()
+            blocks.append(line.strip())
+        else:
+            current.append(line)
+    push()
     return [b for b in blocks if b.strip()]
 
 

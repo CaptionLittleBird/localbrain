@@ -31,10 +31,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--yes", action="store_true", help="确认执行")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    for noisy in ("httpx", "httpcore", "openai"):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
-
+    setup_logging()
     settings = get_settings()
     try:
         _run(args, settings)
@@ -42,6 +39,16 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(f"错误：{e}")
     except KeyboardInterrupt:
         pass
+
+
+def setup_logging() -> None:
+    """主进程和解析子进程共用的日志格式。"""
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    for noisy in ("httpx", "httpcore", "openai", "docling"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+    # Docling 表格识别的对齐提示，量大没用；它每次创建对象都会重设日志级别，只能在输出端过滤
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(lambda r: r.name != "MatchingPostProcessor" or r.levelno >= logging.ERROR)
 
 
 def _run(args: argparse.Namespace, settings: Settings) -> None:
@@ -84,10 +91,11 @@ def _retriever(settings: Settings):
 def _status(settings: Settings) -> None:
     from .store import Registry
 
+    labels = {"ok": "正常", "error": "失败", "indexing": "入库中"}
     docs = Registry(settings.db_path).all()
-    failed = [d for d in docs if d.status != "ok"]
+    failed = [d for d in docs if d.status == "error"]
     for d in docs:
-        line = f"[{'正常' if d.status == 'ok' else '失败'}] {d.path}  {d.num_chunks} 段"
+        line = f"[{labels.get(d.status, d.status)}] {d.path}  {d.num_chunks} 段"
         print(line + (f"  {d.error}" if d.error else ""))
     print(f"\n共 {len(docs)} 篇，失败 {len(failed)} 篇。文档目录：{settings.docs_dir}")
 

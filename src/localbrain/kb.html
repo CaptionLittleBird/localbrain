@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>localbrain 文档库</title>
+<base href="/kb/">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7385; --line: #e3e6ec;
+    --accent: #2f6fed; --accent-soft: #e8effe; --ok: #1f8a4c; --ok-soft: #e4f4ea;
+    --warn: #a86400; --warn-soft: #fdf1dc; --err: #c8372d; --err-soft: #fbe7e5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c; --card: #1c2027; --text: #e6e8ec; --muted: #9098a8; --line: #2c323c;
+      --accent: #6b9bff; --accent-soft: #1f2b44; --ok: #5cc98a; --ok-soft: #173024;
+      --warn: #e7a94a; --warn-soft: #33281a; --err: #ff7b72; --err-soft: #3a1f1d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0; }
+  button, .btn { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text);
+                 border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger:hover { border-color: var(--err); color: var(--err); }
+  input[type=text], input[type=password], input[type=search] {
+    font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--card); color: var(--text); min-width: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .hidden { display: none !important; }
+
+  #login { max-width: 360px; margin: 15vh auto 0; }
+  #login form { display: flex; gap: 8px; margin-top: 12px; }
+  #login input { flex: 1; }
+
+  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 24px 16px; text-align: center; transition: .15s; }
+  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop p { margin: 0 0 10px; }
+  .target { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  .target input { flex: 1; min-width: 180px; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; }
+
+  .queue:empty { display: none; }
+  .queue { margin-top: 12px; display: grid; gap: 6px; }
+  .qitem { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 13px; }
+  .qitem .bar { grid-column: 1 / -1; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .qitem .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .qitem.done .bar i { background: var(--ok); }
+  .qitem.fail .bar i { background: var(--err); width: 100%; }
+  .qitem .msg { grid-column: 1 / -1; color: var(--err); }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  .toolbar input { flex: 1; min-width: 160px; }
+  .chip { border-radius: 999px; padding: 2px 10px; font-size: 13px; }
+  .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+  .banner { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .list { display: grid; }
+  .doc { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 2px; border-top: 1px solid var(--line); }
+  .doc:first-child { border-top: none; }
+  .doc a { color: var(--text); text-decoration: none; word-break: break-all; font-weight: 500; }
+  .doc a:hover { color: var(--accent); }
+  .doc .side { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
+  .doc .err { grid-column: 1 / -1; color: var(--err); font-size: 12px; word-break: break-all; }
+  .badge { font-size: 12px; border-radius: 4px; padding: 1px 8px; white-space: nowrap; }
+  .s-ok { background: var(--ok-soft); color: var(--ok); }
+  .s-error { background: var(--err-soft); color: var(--err); }
+  .s-pending, .s-indexing, .s-removing { background: var(--warn-soft); color: var(--warn); }
+  .empty { text-align: center; padding: 30px 0; }
+  @media (max-width: 560px) {
+    .doc { grid-template-columns: 1fr; }
+    .doc .side { justify-content: flex-start; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="card hidden">
+    <h1>localbrain 文档库</h1>
+    <p id="login-hint" class="muted small">输入 .env 里设置的 WEB_PASSWORD</p>
+    <form id="login-form">
+      <input id="password" type="password" placeholder="密码" autocomplete="current-password" required>
+      <button class="primary">登录</button>
+    </form>
+    <p id="login-err" class="small" style="color: var(--err)"></p>
+  </section>
+
+  <div id="app" class="hidden">
+    <header>
+      <h1>localbrain 文档库</h1>
+      <button id="logout">退出</button>
+    </header>
+
+    <section class="card">
+      <div id="drop" class="drop">
+        <p>把文件拖到这里，或者</p>
+        <button class="primary" id="pick">选择文件</button>
+        <input id="files" type="file" multiple class="hidden">
+      </div>
+      <div class="target">
+        <span class="muted">存放到子目录</span>
+        <input id="folder" type="text" list="folders" placeholder="可选，例如 书籍/Linux">
+        <datalist id="folders"></datalist>
+      </div>
+      <details class="small muted">
+        <summary>支持的格式</summary>
+        <p id="formats"></p>
+        <p>上传后由 watch 服务自动入库，大部头的书需要几分钟。.xls / .ppt 需要装 LibreOffice；有 DRM 的电子书需要先去掉 DRM。</p>
+      </details>
+      <div id="queue" class="queue"></div>
+    </section>
+
+    <section class="card">
+      <div id="stalled" class="banner small hidden">
+        有文件等了一分多钟还没开始入库，请确认 watch 服务在运行：
+        <code>launchctl print gui/$(id -u)/com.localbrain.watch</code>
+      </div>
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="按文件名筛选">
+        <span id="chips"></span>
+      </div>
+      <div id="list" class="list"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const STATUS = { ok: "已入库", error: "失败", indexing: "入库中", pending: "等待入库", removing: "移除中" };
+const BUSY = new Set(["indexing", "pending", "removing"]);
+let docs = [], filter = "all", uploading = 0, timer = null;
+const firstSeenPending = new Map();
+
+function h(tag, props = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "class") el.className = v;
+    else el.setAttribute(k, v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) el.append(c);
+  return el;
+}
+
+async function api(method, url, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  const resp = await fetch(url, opts);
+  if (resp.status === 401 || resp.status === 503) { showLogin(await detail(resp)); throw new Error("login"); }
+  if (!resp.ok) throw new Error(await detail(resp));
+  return resp.json();
+}
+
+async function detail(resp) {
+  try { return (await resp.json()).detail || resp.statusText; } catch { return resp.statusText; }
+}
+
+function showLogin(msg) {
+  $("app").classList.add("hidden");
+  $("login").classList.remove("hidden");
+  if (msg && msg !== "请先登录") $("login-hint").textContent = msg;
+  clearTimeout(timer);
+}
+
+$("login-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("login-err").textContent = "";
+  const resp = await fetch("api/login", { method: "POST", headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ password: $("password").value }) });
+  if (!resp.ok) { $("login-err").textContent = await detail(resp); return; }
+  $("password").value = "";
+  $("login").classList.add("hidden");
+  refresh();
+});
+
+$("logout").addEventListener("click", async () => { await fetch("api/logout", { method: "POST" }); showLogin(); });
+
+// ---------- 文档列表 ----------
+
+async function refresh() {
+  clearTimeout(timer);
+  try {
+    const data = await api("GET", "api/docs");
+    docs = data.docs;
+    $("app").classList.remove("hidden");
+    $("formats").textContent = data.suffixes.join("  ");
+    $("files").setAttribute("accept", data.suffixes.join(","));
+    $("folders").replaceChildren(...data.folders.map((f) => h("option", { value: f })));
+    render();
+  } catch (e) {
+    if (e.message === "login") return;
+    console.error(e);
+  }
+  const busy = uploading > 0 || docs.some((d) => BUSY.has(d.status));
+  timer = setTimeout(refresh, busy ? 3000 : 20000);
+}
+
+function render() {
+  const counts = { all: docs.length, ok: 0, busy: 0, error: 0 };
+  for (const d of docs) {
+    if (d.status === "ok") counts.ok++;
+    else if (d.status === "error") counts.error++;
+    else counts.busy++;
+  }
+  const chip = (key, label) => h("button", {
+    class: "chip" + (filter === key ? " active" : ""),
+    onclick: () => { filter = key; render(); },
+  }, `${label} ${counts[key]}`);
+  $("chips").replaceChildren(chip("all", "全部"), " ", chip("ok", "已入库"), " ", chip("busy", "处理中"), " ", chip("error", "失败"));
+
+  const now = Date.now();
+  for (const d of docs) if (d.status === "pending" && !firstSeenPending.has(d.path)) firstSeenPending.set(d.path, now);
+  for (const p of [...firstSeenPending.keys()]) if (!docs.some((d) => d.path === p && d.status === "pending")) firstSeenPending.delete(p);
+  $("stalled").classList.toggle("hidden", ![...firstSeenPending.values()].some((t) => now - t > 70000));
+
+  const q = $("search").value.trim().toLowerCase();
+  const shown = docs
+    .filter((d) => filter === "all" || (filter === "busy" ? BUSY.has(d.status) : d.status === filter))
+    .filter((d) => !q || d.path.toLowerCase().includes(q))
+    .sort((a, b) => (BUSY.has(b.status) - BUSY.has(a.status)) || (b.status === "error") - (a.status === "error")
+                    || b.updated_at - a.updated_at);
+  $("list").replaceChildren(...(shown.length ? shown.map(row)
+    : [h("p", { class: "empty muted" }, docs.length ? "没有符合条件的文档" : "还没有文档，从上面上传")]));
+}
+
+function row(d) {
+  const slash = d.path.lastIndexOf("/");
+  const name = d.path.slice(slash + 1), folder = slash >= 0 ? d.path.slice(0, slash) : "";
+  const meta = [fmtSize(d.size), d.status === "ok" ? `${d.chunks} 段` : null, fmtTime(d.updated_at)].filter(Boolean).join(" · ");
+  const actions = [];
+  if (d.status === "error") actions.push(h("button", { onclick: () => retry(d) }, "重试"));
+  if (d.status !== "removing") actions.push(h("button", { class: "danger", onclick: () => remove(d) }, "删除"));
+  return h("div", { class: "doc" },
+    h("div", {},
+      d.status === "removing" ? h("span", {}, name)
+        : h("a", { href: "api/raw?path=" + encodeURIComponent(d.path), target: "_blank", rel: "noopener" }, name),
+      h("div", { class: "muted small" }, [folder, meta].filter(Boolean).join("  ·  "))),
+    h("div", { class: "side" }, h("span", { class: "badge s-" + d.status }, STATUS[d.status] || d.status), ...actions),
+    d.error ? h("div", { class: "err" }, d.error) : null);
+}
+
+async function retry(d) {
+  try { await api("POST", "api/retry?path=" + encodeURIComponent(d.path)); refresh(); }
+  catch (e) { if (e.message !== "login") alert("重试失败：" + e.message); }
+}
+
+async function remove(d) {
+  if (!confirm(`删除「${d.path}」？文件会从文档目录删掉，同时移出知识库。`)) return;
+  try { await api("DELETE", "api/files?path=" + encodeURIComponent(d.path)); refresh(); }
+  catch (e) { if (e.message !== "login") alert("删除失败：" + e.message); }
+}
+
+function fmtSize(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1 << 20) return (n / 1024).toFixed(0) + " KB";
+  if (n < 1 << 30) return (n / (1 << 20)).toFixed(1) + " MB";
+  return (n / (1 << 30)).toFixed(2) + " GB";
+}
+
+function fmtTime(ts) {
+  const diff = Date.now() / 1000 - ts;
+  if (diff < 60) return "刚刚";
+  if (diff < 3600) return Math.floor(diff / 60) + " 分钟前";
+  if (diff < 86400) return Math.floor(diff / 3600) + " 小时前";
+  const d = new Date(ts * 1000), p = (x) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+$("search").addEventListener("input", render);
+
+// ---------- 上传 ----------
+
+const drop = $("drop");
+$("pick").addEventListener("click", () => $("files").click());
+$("files").addEventListener("change", (e) => { enqueue([...e.target.files]); e.target.value = ""; });
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); enqueue([...e.dataTransfer.files]); });
+
+const pendingUploads = [];
+let draining = false;
+
+function enqueue(files) {
+  const folder = $("folder").value.trim().replace(/^\/+|\/+$/g, "");
+  for (const file of files) {
+    const path = folder ? `${folder}/${file.name}` : file.name;
+    const bar = h("i");
+    const status = h("span", { class: "muted" }, "等待上传");
+    const msg = h("div", { class: "msg hidden" });
+    const item = h("div", { class: "qitem" }, h("span", {}, path), status, h("div", { class: "bar" }, bar), msg);
+    $("queue").prepend(item);
+    pendingUploads.push({ file, path, item, bar, status, msg });
+  }
+  drain();
+}
+
+async function drain() {
+  if (draining) return;
+  draining = true;
+  while (pendingUploads.length) {
+    const job = pendingUploads.shift();
+    uploading++;
+    try { await uploadOne(job, false); } finally { uploading--; }
+    refresh();
+  }
+  draining = false;
+}
+
+async function uploadOne(job, overwrite) {
+  const { file, path, item, bar, status, msg } = job;
+  status.textContent = "上传中";
+  const result = await new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", `api/files?path=${encodeURIComponent(path)}&overwrite=${overwrite}`);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) bar.style.width = (e.loaded / e.total * 100) + "%"; };
+    xhr.onload = () => resolve({ status: xhr.status, body: xhr.responseText });
+    xhr.onerror = () => resolve({ status: 0, body: "" });
+    xhr.send(file);
+  });
+  if (result.status === 409 && !overwrite) {
+    if (confirm(`「${path}」已经存在，覆盖它吗？`)) return uploadOne(job, true);
+    item.classList.add("fail"); status.textContent = "已跳过"; return;
+  }
+  if (result.status === 401 || result.status === 503) { showLogin(); }
+  if (result.status >= 200 && result.status < 300) {
+    item.classList.add("done"); status.textContent = "已上传，等待入库"; bar.style.width = "100%";
+    setTimeout(() => item.remove(), 8000);
+    return;
+  }
+  let reason = result.status === 0 ? "网络错误" : `HTTP ${result.status}`;
+  try { reason = JSON.parse(result.body).detail || reason; } catch {}
+  item.classList.add("fail"); status.textContent = "失败";
+  msg.textContent = reason; msg.classList.remove("hidden");
+}
+
+refresh();
+</script>
+</body>
+</html>

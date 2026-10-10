@@ -101,7 +101,7 @@ class Registry:
 class VectorStore:
     def __init__(self, url: str, collection: str) -> None:
         if url.startswith(("http://", "https://")):
-            self.client = QdrantClient(url=url)
+            self.client = QdrantClient(url=url, timeout=60)  # 默认 5 秒，大批量写入时偶尔不够
         else:
             self.client = QdrantClient(path=str(resolve_path(url)))
             atexit.register(self.client.close)  # 嵌入模式要在解释器退出前关闭，否则退出时报错
@@ -204,6 +204,9 @@ class VectorStore:
         )
         points, _ = self.client.scroll(self.collection, scroll_filter=flt, limit=count, with_payload=True)
         return sorted((_to_hit(p.payload) for p in points), key=lambda h: h.chunk_index)
+
+    def count(self) -> int:
+        return self.client.count(self.collection, exact=True).count
 
     def drop(self) -> None:
         if self.client.collection_exists(self.collection):

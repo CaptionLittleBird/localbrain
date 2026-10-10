@@ -18,7 +18,8 @@
   localbrain watch [原生]   监听 data/docs → Docling 解析 → 切块 → 向量化 → 写入
 ```
 
-- **解析**：PDF、DOCX 用 Docling 转成 Markdown（保留标题层级和表格，PDF 按页记录页码）；TXT、MD 直接读取（自动识别 UTF-8 / GBK）。
+- **解析**：用 Docling 转成 Markdown，保留标题层级和表格，PDF 按页、演示文稿按幻灯片记录页码；TXT、MD 直接读取（自动识别 UTF-8 / GBK）。支持的格式见下面「文档格式」。
+- **入库**：解析在独立的子进程里并行进行，和向量化同时跑；单个文件卡住或崩溃只影响它自己（超时后终止，记为失败）。
 - **检索**：向量 + jieba 分词的 BM25 做混合召回，再重排。向量和重排模型由 oMLX 提供，本项目通过 `/v1/embeddings`、`/v1/rerank` 调用。
 - **Agent**：有三个工具：`search_kb` 检索、`read_document` 读上下文、`list_documents` 列文档。由模型决定查几次、查什么，回答时标注出处。
 - **为什么模型不放在 Docker 里**：Mac 上的 Docker 跑在 Linux 虚拟机里，用不了 GPU（Metal）。oMLX 原生运行，通过 MLX 使用 GPU。
@@ -46,9 +47,11 @@ src/localbrain/
   sparse.py      BM25 稀疏向量
   store.py       SQLite 文档清单 + Qdrant 向量库
   ingest.py      入库与目录监听
+  workers.py     解析进程池（并行、超时、崩溃隔离）
   retrieval.py   混合检索 + 重排
   agent.py       LangGraph Agent 和工具
   server.py      OpenAI 兼容接口
+  web.py         文档管理页面的接口（页面本身是 kb.html）
   cli.py         命令行
 scripts/macos/   launchd 服务安装脚本
 eval/            检索评估问题集示例
@@ -160,7 +163,7 @@ curl http://127.0.0.1:8000/v1/models
 ```bash
 git clone <你的仓库> ~/localbrain && cd ~/localbrain
 uv sync
-cp .env.example .env && vi .env    # 填 LLM_API_KEY、LOCALBRAIN_API_KEY、WEBUI_SECRET_KEY，核对模型名
+cp .env.example .env && vi .env    # 填 LLM_API_KEY、LOCALBRAIN_API_KEY、WEBUI_SECRET_KEY、WEB_PASSWORD，核对模型名
 docker compose up -d
 ```
 
@@ -189,19 +192,40 @@ bash scripts/macos/install-services.sh
 
 **6. 使用**
 
-浏览器打开 `http://<Mac 的名字>.local:3000`（端口以 `WEBUI_PORT` 为准）。第一个注册的账号就是管理员。在外面用手机访问的话，Mac 和手机都装上 Tailscale，然后用 Tailscale 分配的地址访问。
+浏览器打开 `http://<Mac 的名字>.local:3000`（端口以 `WEBUI_PORT` 为准）。第一个注册的账号就是管理员，建好之后在管理员设置里关掉新用户注册。在外面用手机访问的话，Mac 和手机都装上 Tailscale，然后用 Tailscale 分配的地址访问。
+
+文档管理页面在 `http://127.0.0.1:8800/kb`（端口以 `API_PORT` 为准），用 `WEB_PASSWORD` 登录，可以上传、删除文档，查看入库状态和失败原因，在线打开原文。想在其他设备上用，把 `API_HOST` 改成 `0.0.0.0`，这时 `LOCALBRAIN_API_KEY` 也会暴露在局域网上，务必换成随机字符串（换了之后要在 Open WebUI 管理员设置 → 外部连接里同步修改）。
 
 ## 日常使用
 
 | 做什么 | 怎么做 |
 |---|---|
-| 加文档 | 拷进 `data/docs`（可以建子目录），watch 服务会自动入库；删除文件后也会同步移除 |
-| 看入库情况 | `uv run localbrain status`（失败的文档会显示原因） |
+| 加文档 | 在文档管理页面上传，或者直接拷进 `data/docs`（可以建子目录），watch 服务会自动入库；删除文件后也会同步移除 |
+| 看入库情况 | 文档管理页面，或 `uv run localbrain status`（失败的文档会显示原因） |
+| 重试失败的文档 | 页面上点「重试」，或 `uv run localbrain ingest --force` |
 | 重新入库 | `uv run localbrain ingest --force` |
 | 调检索效果 | `uv run localbrain search "问题" -k 10` |
 | 评估命中率 | 参照 `eval/questions.example.jsonl` 写 30~50 个真实问题，运行 `uv run localbrain eval 你的文件.jsonl` |
 | 换向量模型或 `EMBED_BACKEND` | 改完后执行 `uv run localbrain reset --yes`，再重新入库 |
 | 看日志 | `tail -f ~/Library/Logs/localbrain/serve.log` |
+
+## 文档格式
+
+| 格式 | 说明 |
+|---|---|
+| PDF | 有文字层的直接提取；缺文字层的页超过两成就按扫描件 OCR（`OCR=auto`）。会按 PDF 书签和章节编号推断标题层级 |
+| EPUB | 按书的阅读顺序解析，保留章节标题和表格。有 DRM 的书读不到正文，会提示需要先去掉 DRM |
+| Word：.docx .docm、.doc .rtf | .doc、.rtf 在 macOS 上用系统自带的 textutil 转换，不用装 LibreOffice |
+| 表格：.xlsx .xlsm .csv、演示文稿：.pptx .ppsx .pptm | 演示文稿按幻灯片标注页码 |
+| OpenDocument：.odt .ods .odp；iWork：.pages .key .numbers | |
+| 网页和邮件：.html .htm .xhtml .mhtml .mht、.eml .msg | |
+| 其他文本：.txt .md .markdown .adoc .asciidoc .tex | |
+| 图片：.png .jpg .jpeg .tif .tiff .bmp .webp | OCR 识别文字，只在 macOS 上可用 |
+| .xls .ppt（老版 Office） | 需要安装 LibreOffice：`brew install --cask libreoffice`。没装的话入库会失败并提示原因 |
+
+MOBI、AZW3 等 Kindle 格式不支持，可以用 Calibre 批量转成 EPUB：`ebook-convert 书名.azw3 书名.epub`。
+
+**性能参考（M4 Mac mini，1051 页的《鸟哥的 Linux 私房菜》）**：解析 4 分多钟（约 0.25 秒/页；扫描件要 OCR，约 0.6 秒/页），切成约 2100 段，向量化 5 分钟左右，整本约 10 分钟。向量化是最慢的一步，受 GPU 算力限制，加大批量、并发都不会更快；多个文件时，解析和向量化会同时进行。
 
 ## Docling 模型（可选，预先下载）
 

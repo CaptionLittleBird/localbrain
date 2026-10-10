@@ -18,6 +18,10 @@ from .config import SetupError, get_settings
 log = logging.getLogger(__name__)
 
 
+class ModelInputError(SetupError):
+    """模型服务拒绝了这批输入（400 / 413 / 422），是这篇文档内容的问题，不是服务本身的问题。"""
+
+
 class Embedder(Protocol):
     dim: int
 
@@ -76,6 +80,10 @@ class ApiClient:
             raise SetupError(
                 f"连不上模型服务 {self.base_url}（{e}）。请确认 oMLX 已启动、OMLX_BASE_URL 配置正确。"
             ) from e
+        if resp.status_code in (400, 413, 422):
+            raise ModelInputError(
+                f"模型服务拒绝了输入 {resp.status_code}（{path}，模型 {payload.get('model')}）：{resp.text[:300]}"
+            )
         if resp.status_code >= 400:
             raise SetupError(
                 f"模型服务返回 {resp.status_code}（{path}，模型 {payload.get('model')}）：{resp.text[:300]}"
@@ -90,18 +98,22 @@ def _omlx_client() -> ApiClient:
 
 
 class ApiEmbedder:
-    def __init__(self, client: ApiClient, model: str, batch_size: int = 32) -> None:
+    # 批大小不影响吞吐（oMLX 按 GPU 算力串行处理），小一点能让入库期间的检索请求少排一会儿队
+    def __init__(self, client: ApiClient, model: str, batch_size: int = 16) -> None:
         self.client = client
         self.model = model
         self.batch_size = batch_size
         self.dim = len(self.embed(["dim"])[0])  # 请求一次，顺便确认服务可用并拿到向量维度
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        vectors: list[list[float]] = []
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            data = self.client.post("/embeddings", {"model": self.model, "input": batch})["data"]
-            vectors.extend(d["embedding"] for d in sorted(data, key=lambda d: d["index"]))
+        # 同一批会补齐到最长那条的长度再算，长短混在一起白算很多填充；按长度排序后分批，算完再按原顺序放回
+        order = sorted(range(len(texts)), key=lambda i: len(texts[i]))
+        vectors: list[list[float]] = [[] for _ in texts]
+        for start in range(0, len(order), self.batch_size):
+            ids = order[start : start + self.batch_size]
+            data = self.client.post("/embeddings", {"model": self.model, "input": [texts[i] for i in ids]})["data"]
+            for d in data:
+                vectors[ids[d["index"]]] = d["embedding"]
         return vectors
 
 
