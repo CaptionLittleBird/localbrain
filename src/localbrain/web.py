@@ -11,9 +11,10 @@ import hmac
 import os
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from starlette.requests import ClientDisconnect
 
@@ -36,11 +37,15 @@ def _session_token(password: str) -> str:
     return hmac.new(password.encode(), b"localbrain-web-session", hashlib.sha256).hexdigest()
 
 
-def require_login(request: Request) -> None:
+def _logged_in(request: Request) -> bool:
     password = get_settings().web_password
-    if not password:
+    return bool(password) and hmac.compare_digest(request.cookies.get(_COOKIE, ""), _session_token(password))
+
+
+def require_login(request: Request) -> None:
+    if not get_settings().web_password:
         raise HTTPException(503, "没有设置 WEB_PASSWORD：在 .env 里设置后重启 serve 服务")
-    if not hmac.compare_digest(request.cookies.get(_COOKIE, ""), _session_token(password)):
+    if not _logged_in(request):
         raise HTTPException(401, "请先登录")
 
 
@@ -83,8 +88,9 @@ async def login(body: Login, response: Response) -> dict:
     if not hmac.compare_digest(body.password.encode(), password.encode()):
         await asyncio.sleep(1)  # 拖慢暴力猜密码
         raise HTTPException(401, "密码不对")
+    # lax：从 Open WebUI 点出处链接跳过来时也带上登录状态；改数据的接口都不是 GET，跨站请求仍然带不上
     response.set_cookie(
-        _COOKIE, _session_token(password), max_age=30 * 86400, httponly=True, samesite="strict"
+        _COOKIE, _session_token(password), max_age=30 * 86400, httponly=True, samesite="lax"
     )
     return {"ok": True}
 
@@ -177,6 +183,20 @@ def retry(path: str) -> dict:
         raise HTTPException(404, "文件不存在")
     os.utime(target)
     return {"ok": True}
+
+
+@router.get("/open", include_in_schema=False)
+def open_source(request: Request, path: str, page: int | None = None) -> RedirectResponse:
+    """回答里出处链接指向这里：已登录就打开原文（PDF 跳到对应页），没登录先去登录页，登录后再回来。"""
+    if not _logged_in(request):
+        return RedirectResponse(f"/kb?next={quote(request.url.path + '?' + request.url.query, safe='')}")
+    target = _resolve(path)
+    if not target.is_file():
+        raise HTTPException(404, f"文件不存在（可能已删除或改名）：{path}")
+    url = f"/kb/api/raw?path={quote(path)}"
+    if page and target.suffix.lower() == ".pdf":
+        url += f"#page={page}"  # 浏览器自带的 PDF 阅读器认这个
+    return RedirectResponse(url)
 
 
 @router.get("/api/raw", dependencies=[Depends(require_login)])

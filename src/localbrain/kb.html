@@ -178,6 +178,9 @@ $("login-form").addEventListener("submit", async (e) => {
                                           body: JSON.stringify({ password: $("password").value }) });
   if (!resp.ok) { $("login-err").textContent = await detail(resp); return; }
   $("password").value = "";
+  // 从回答里的出处链接跳过来的，登录后回到原来要打开的文件
+  const next = new URLSearchParams(location.search).get("next");
+  if (next && next.startsWith("/kb/")) { location.href = next; return; }
   $("login").classList.add("hidden");
   refresh();
 });

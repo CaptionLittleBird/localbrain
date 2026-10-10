@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from .agent import build_agent, stream_answer
+from .citations import CitationLinker, strip_links
 from .config import get_settings
 from .retrieval import Retriever
 from .store import Registry, VectorStore
@@ -72,16 +73,15 @@ async def list_models() -> dict:
 async def chat_completions(request: Request):
     body = await request.json()
     messages = to_langchain_messages(body.get("messages", []))
-    agent = request.app.state.agent
     completion_id = f"chatcmpl-{uuid.uuid4().hex}"
     created = int(time.time())
 
     if body.get("stream"):
         return StreamingResponse(
-            _sse(_answer(agent, messages), completion_id, created), media_type="text/event-stream"
+            _sse(_answer(request, messages), completion_id, created), media_type="text/event-stream"
         )
 
-    content = "".join([text async for text in _answer(agent, messages)])
+    content = "".join([text async for text in _answer(request, messages)])
     return {
         "id": completion_id,
         "object": "chat.completion",
@@ -103,7 +103,7 @@ def to_langchain_messages(messages: list[dict]) -> list[BaseMessage]:
             case "user":
                 converted.append(HumanMessage(content))
             case "assistant":
-                converted.append(AIMessage(content))
+                converted.append(AIMessage(strip_links(content)))
     return converted
 
 
@@ -116,13 +116,19 @@ def _text_content(content) -> str:
     return ""
 
 
-async def _answer(agent, messages: list[BaseMessage]) -> AsyncIterator[str]:
+async def _answer(request: Request, messages: list[BaseMessage]) -> AsyncIterator[str]:
+    # 出处 [文件名 p.12] 换成链接，点开直接看原文
+    linker = CitationLinker(request.app.state.registry.all(), get_settings().public_url)
     try:
-        async for text in stream_answer(agent, messages):
-            yield text
+        async for text in stream_answer(request.app.state.agent, messages):
+            if out := linker.feed(text):
+                yield out
     except Exception as e:
         log.exception("回答失败")
-        yield f"\n\n出错了：{type(e).__name__}: {e}"
+        yield linker.flush() + f"\n\n出错了：{type(e).__name__}: {e}"
+        return
+    if rest := linker.flush():
+        yield rest
 
 
 async def _sse(texts: AsyncIterator[str], completion_id: str, created: int) -> AsyncIterator[str]:

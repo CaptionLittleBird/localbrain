@@ -52,6 +52,7 @@ src/localbrain/
   agent.py       LangGraph Agent 和工具
   server.py      OpenAI 兼容接口
   web.py         文档管理页面的接口（页面本身是 kb.html）
+  citations.py   把回答里的出处换成打开原文的链接
   cli.py         命令行
 scripts/macos/   launchd 服务安装脚本
 eval/            检索评估问题集示例
@@ -194,7 +195,7 @@ bash scripts/macos/install-services.sh
 
 浏览器打开 `http://<Mac 的名字>.local:3000`（端口以 `WEBUI_PORT` 为准）。第一个注册的账号就是管理员，建好之后在管理员设置里关掉新用户注册。在外面用手机访问的话，Mac 和手机都装上 Tailscale，然后用 Tailscale 分配的地址访问。
 
-文档管理页面在 `http://127.0.0.1:8800/kb`（端口以 `API_PORT` 为准），用 `WEB_PASSWORD` 登录，可以上传、删除文档，查看入库状态和失败原因，在线打开原文。想在其他设备上用，把 `API_HOST` 改成 `0.0.0.0`，这时 `LOCALBRAIN_API_KEY` 也会暴露在局域网上，务必换成随机字符串（换了之后要在 Open WebUI 管理员设置 → 外部连接里同步修改）。
+文档管理页面在 `http://127.0.0.1:8800/kb`（端口以 `API_PORT` 为准），用 `WEB_PASSWORD` 登录，可以上传、删除文档，查看入库状态和失败原因，在线打开原文。回答里的出处 `[文件名 p.12]` 会自动变成链接，点开直接看原文，PDF 跳到对应页（没登录的话先登录，登录后自动跳回去）。想在其他设备上用，把 `API_HOST` 改成 `0.0.0.0`，这时 `LOCALBRAIN_API_KEY` 也会暴露在局域网上，务必换成随机字符串（换了之后要在 Open WebUI 管理员设置 → 外部连接里同步修改）。出处链接的地址默认是 `http://<本机名>.local:8800`，用 Tailscale 在外面访问时把 `PUBLIC_URL` 设成 Tailscale 的地址。
 
 ## 日常使用
 

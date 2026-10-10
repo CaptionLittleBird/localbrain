@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8800
     web_password: str = ""  # 文档管理页面 /kb 的登录密码；不设置则页面不可用
+    # 回答里出处链接的地址前缀，浏览器要能打开它。留空则按 API_HOST 推断：
+    # 只监听本机时是 http://127.0.0.1:端口，监听局域网时是 http://<本机名>.local:端口
+    public_url: str = ""
 
     # 知识库存储
     docs_dir: Path = Path("data/docs")
@@ -76,10 +79,21 @@ class Settings(BaseSettings):
         self.db_path = resolve_path(self.db_path)
         if not self.qdrant_url:
             self.qdrant_url = f"http://127.0.0.1:{self.qdrant_port}"
+        if not self.public_url:
+            host = "127.0.0.1" if self.api_host in ("127.0.0.1", "localhost", "::1") else _local_hostname()
+            self.public_url = f"http://{host}:{self.api_port}"
 
 
 class SetupError(RuntimeError):
     """配置或外部服务的问题，命令行只显示提示信息，不打印调用栈。"""
+
+
+def _local_hostname() -> str:
+    """局域网里用 Bonjour 名访问本机，比 IP 稳定（DHCP 换了 IP 也不受影响）。"""
+    import socket
+
+    name = socket.gethostname()
+    return name if name.endswith(".local") or "." in name else f"{name}.local"
 
 
 def resolve_path(p: str | Path) -> Path:
