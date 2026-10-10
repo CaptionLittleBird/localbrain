@@ -82,9 +82,11 @@ class Ingestor:
         started = time.time()
         chunks: list[Chunk] = []
         try:
-            chunks = chunk_sections(parse_file(path), self.settings.chunk_size)
+            sections = parse_file(path)
+            chunks = chunk_sections(sections, self.settings.chunk_size)
+            log.info("解析完成：%d 页/段 → %d 块，用时 %.1fs", len(sections), len(chunks), time.time() - started)
             texts = [_embed_text(rel, c) for c in chunks]
-            dense = self.embedder.embed(texts) if self.embedder and texts else None
+            dense = self._embed(texts) if self.embedder and texts else None
             sparse = [doc_vector(t) for t in texts]
             self.store.replace_doc(doc_id, rel, chunks, dense, sparse)
             status, error = "ok", ""
@@ -97,6 +99,16 @@ class Ingestor:
                 doc_id, rel, path.name, stat.st_size, stat.st_mtime, sha, len(chunks), status, error, time.time()
             )
         )
+
+    def _embed(self, texts: list[str], step: int = 256) -> list[list[float]]:
+        """分批向量化；大文档每批打一行进度，免得看起来像卡住了。"""
+        assert self.embedder is not None
+        vectors: list[list[float]] = []
+        for i in range(0, len(texts), step):
+            vectors.extend(self.embedder.embed(texts[i : i + step]))
+            if len(texts) > step:
+                log.info("向量化 %d/%d", len(vectors), len(texts))
+        return vectors
 
 
 def _embed_text(rel_path: str, chunk: Chunk) -> str:

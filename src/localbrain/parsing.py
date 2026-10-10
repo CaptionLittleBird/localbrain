@@ -1,6 +1,7 @@
 """文档解析：PDF / DOCX 交给 Docling 转成 Markdown，TXT / MD 直接读取。"""
 from __future__ import annotations
 
+import logging
 import re
 import sys
 from dataclasses import dataclass
@@ -8,6 +9,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from .config import get_settings, resolve_path
+
+log = logging.getLogger(__name__)
 
 SUPPORTED_SUFFIXES = {".pdf", ".docx", ".txt", ".md"}
 
@@ -29,8 +32,25 @@ def parse_file(path: Path) -> list[Section]:
     # DOCX 由 Docling 直接读取文档结构，不需要模型；PDF 要跑版面分析和表格识别模型
     doc = _converter().convert(path).document
     if suffix == ".pdf":
-        return [Section(_clean(doc.export_to_markdown(page_no=p)), page=p) for p in sorted(doc.pages)]
+        return _split_pages(doc)
     return [Section(_clean(doc.export_to_markdown()))]
+
+
+_PAGE_BREAK = "<!-- localbrain:page-break -->"
+
+
+def _split_pages(doc) -> list[Section]:
+    """整本导出一次，再按分页标记拆回各页。
+
+    不用 export_to_markdown(page_no=p) 逐页导出：每次调用都要遍历全文，几百页的书要几十分钟。
+    Docling 只在有内容的页之间插入分页标记，所以拆出来的段和有内容的页按顺序一一对应。
+    """
+    parts = doc.export_to_markdown(page_break_placeholder=_PAGE_BREAK).split(_PAGE_BREAK)
+    pages = sorted({item.prov[0].page_no for item, _ in doc.iterate_items() if getattr(item, "prov", None)})
+    if len(parts) != len(pages):
+        log.warning("分页标记和页码对不上（%d 段 / %d 页），这份 PDF 不标注页码", len(parts), len(pages))
+        return [Section(_clean("\n\n".join(parts)))]
+    return [Section(_clean(text), page=page) for page, text in zip(pages, parts)]
 
 
 def _read_text(path: Path) -> str:
