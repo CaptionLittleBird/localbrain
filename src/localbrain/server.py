@@ -25,6 +25,7 @@ MODEL_ID = "localbrain"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    log.info("大模型：%s（%s）", settings.llm_model, settings.llm_base_url)
     if not settings.llm_api_key:
         log.warning("没有配置 LLM_API_KEY，提问会失败。请在 .env 里填写。")
     registry = Registry(settings.db_path)

@@ -1,6 +1,7 @@
 """Agent：用 LangGraph 搭的工具调用循环，由模型自己决定查几次、查什么。"""
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from datetime import date
 
@@ -14,7 +15,10 @@ from .config import Settings
 from .retrieval import Retriever, format_hit
 from .store import Registry, VectorStore
 
-SYSTEM_PROMPT = """你是用户的个人知识库助手，基于用户自己的文档回答问题。今天是 {today}。
+log = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """你是 localbrain，用户的个人知识库助手，基于用户自己的文档回答问题。今天是 {today}。
+你的底层大模型是 {model}。被问到你是什么模型时，如实回答这一点，不要自称其他模型。
 
 工作方式：
 1. 涉及具体事实、数据、文档内容的问题，先用 search_kb 检索，不要凭记忆回答。
@@ -78,8 +82,10 @@ def build_agent(settings: Settings, retriever: Retriever, registry: Registry, st
     ).bind_tools(tools)
 
     async def call_model(state: MessagesState) -> dict:
-        system = SystemMessage(SYSTEM_PROMPT.format(today=date.today().isoformat()))
+        system = SystemMessage(SYSTEM_PROMPT.format(today=date.today().isoformat(), model=settings.llm_model))
         response = await llm.ainvoke([system, *state["messages"]])
+        # 记下接口实际返回的模型名，用来核对到底是哪个模型在回答（模型的自我介绍不可靠）
+        log.info("大模型应答：%s", response.response_metadata.get("model_name", "未知"))
         return {"messages": [response]}
 
     graph = StateGraph(MessagesState)
