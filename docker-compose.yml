@@ -1,0 +1,41 @@
+# 只放不需要 GPU 的服务：向量库和聊天界面。
+# 模型和 API 服务在宿主机上原生运行（才能用上 Mac 的 GPU），见 README。
+# 端口都在 .env 里配置：QDRANT_PORT、WEBUI_PORT、API_PORT。
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${QDRANT_PORT:-6333}:6333" # 只对本机开放
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    ports:
+      - "${WEBUI_PORT:-3000}:8080" # 浏览器访问 http://<主机>:WEBUI_PORT
+    environment:
+      # 把本项目的 API 当作一个 OpenAI 兼容的模型接入
+      - OPENAI_API_BASE_URL=http://host.docker.internal:${API_PORT:-8800}/v1
+      - OPENAI_API_KEY=${LOCALBRAIN_API_KEY}
+      - DEFAULT_MODELS=localbrain
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      - ENABLE_OLLAMA_API=false
+      # 关掉自动生成标题、标签、追问建议：这些请求也会发给 Agent，白白触发检索
+      - ENABLE_TITLE_GENERATION=false
+      - ENABLE_TAGS_GENERATION=false
+      - ENABLE_FOLLOW_UP_GENERATION=false
+      - ENABLE_AUTOCOMPLETE_GENERATION=false
+      # Open WebUI 自带的知识库功能用不到，关掉它启动时下载嵌入模型
+      - RAG_EMBEDDING_MODEL_AUTO_UPDATE=false
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - open_webui_data:/app/backend/data
+    depends_on:
+      - qdrant
+
+volumes:
+  qdrant_data:
+  open_webui_data:
