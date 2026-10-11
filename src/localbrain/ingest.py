@@ -112,11 +112,13 @@ class Ingestor:
                 "文档目录里一个文件都没有，为防止误删，保留已有的 %d 篇入库记录。确实要清空请运行 localbrain reset --yes",
                 len(records),
             )
-        for rec in records if files else []:
-            if rec.doc_id not in files:
-                self.store.delete_doc(rec.doc_id)
-                self.registry.delete(rec.doc_id)
-                log.info("已移除：%s", rec.path)
+        missing = {r.doc_id: r for r in records if r.doc_id not in files} if files else {}
+        if missing:
+            self._detect_moves(files, missing, {r.doc_id for r in records})
+        for rec in missing.values():
+            self.store.delete_doc(rec.doc_id)
+            self.registry.delete(rec.doc_id)
+            log.info("已移除：%s", rec.path)
 
         jobs: list[Job] = []
         deferred = False
@@ -156,6 +158,42 @@ class Ingestor:
                     retry_at = time.monotonic() + RETRY_SECONDS
         finally:
             self._stop.set()  # 通知后台的同步线程尽快停下，并结束解析子进程
+
+    def _detect_moves(self, files: dict[str, Path], missing: dict[str, DocRecord], known: set[str]) -> None:
+        """新出现的文件和刚消失的文件内容完全相同，就是移动或改名了：只更新路径，不重新解析和向量化。
+
+        只对大小对得上的文件算哈希。移动和改名是瞬间完成的，所以这里不等文件"稳定"；
+        还在拷贝的文件内容对不上，不会被误认。
+        """
+        by_size: dict[int, list[DocRecord]] = {}
+        for rec in missing.values():
+            if rec.status != "indexing":
+                by_size.setdefault(rec.size, []).append(rec)
+        if not by_size:
+            return
+        for doc_id, path in files.items():
+            if doc_id in known:
+                continue
+            try:
+                stat = path.stat()
+                candidates = [r for r in by_size.get(stat.st_size, []) if r.doc_id in missing]
+                if not candidates:
+                    continue
+                sha = _sha256(path)
+            except FileNotFoundError:
+                continue
+            old = next((r for r in candidates if r.sha256 == sha), None)
+            if old is None:
+                continue
+            rel = path.relative_to(self.docs_dir).as_posix()
+            self.store.move_doc(old.doc_id, doc_id, rel)
+            self.registry.delete(old.doc_id)
+            self.registry.upsert(DocRecord(
+                doc_id, rel, path.name, stat.st_size, stat.st_mtime, sha,
+                old.num_chunks, old.status, old.error, time.time(),
+            ))
+            del missing[old.doc_id]
+            log.info("已移动：%s → %s（内容没变，不用重新入库）", old.path, rel)
 
     def _check_consistency(self, records: list[DocRecord]) -> list[DocRecord]:
         """向量库被清空或重建过（比如删了 Qdrant 的数据卷），入库记录却还在：不处理的话所有文件都被当成

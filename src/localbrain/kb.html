@@ -7,164 +7,245 @@
 <base href="/kb/">
 <style>
   :root {
-    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7385; --line: #e3e6ec;
+    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #6b7385; --line: #e3e6ec; --hover: #f1f3f6;
     --accent: #2f6fed; --accent-soft: #e8effe; --ok: #1f8a4c; --ok-soft: #e4f4ea;
-    --warn: #a86400; --warn-soft: #fdf1dc; --err: #c8372d; --err-soft: #fbe7e5;
+    --warn: #a86400; --warn-soft: #fdf1dc; --err: #c8372d; --err-soft: #fbe7e5; --folder: #d9a52b;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #14171c; --card: #1c2027; --text: #e6e8ec; --muted: #9098a8; --line: #2c323c;
+      --bg: #14171c; --card: #1c2027; --text: #e6e8ec; --muted: #9098a8; --line: #2c323c; --hover: #232832;
       --accent: #6b9bff; --accent-soft: #1f2b44; --ok: #5cc98a; --ok-soft: #173024;
-      --warn: #e7a94a; --warn-soft: #33281a; --err: #ff7b72; --err-soft: #3a1f1d;
+      --warn: #e7a94a; --warn-soft: #33281a; --err: #ff7b72; --err-soft: #3a1f1d; --folder: #e7b84a;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
-  main { max-width: 960px; margin: 0 auto; padding: 20px 16px 60px; }
-  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  h1 { font-size: 20px; margin: 0; }
-  button, .btn { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text);
-                 border-radius: 6px; padding: 4px 12px; cursor: pointer; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text);
+           border-radius: 6px; padding: 4px 12px; cursor: pointer; white-space: nowrap; }
   button:hover { border-color: var(--accent); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button.danger:hover { border-color: var(--err); color: var(--err); }
+  button.link { border: none; background: none; padding: 2px 6px; color: var(--muted); }
+  button.link:hover { color: var(--accent); }
   input[type=text], input[type=password], input[type=search] {
     font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
     background: var(--card); color: var(--text); min-width: 0; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
   .muted { color: var(--muted); }
   .small { font-size: 12px; }
   .hidden { display: none !important; }
+  svg.icon { width: 18px; height: 18px; flex: none; }
 
-  #login { max-width: 360px; margin: 15vh auto 0; }
+  #login { max-width: 360px; margin: 15vh auto 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+  #login h1 { font-size: 20px; margin: 0; }
   #login form { display: flex; gap: 8px; margin-top: 12px; }
   #login input { flex: 1; }
 
-  .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 24px 16px; text-align: center; transition: .15s; }
-  .drop.over { border-color: var(--accent); background: var(--accent-soft); }
-  .drop p { margin: 0 0 10px; }
-  .target { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
-  .target input { flex: 1; min-width: 180px; }
-  details { margin-top: 10px; }
-  summary { cursor: pointer; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--card); }
+  header h1 { font-size: 18px; margin: 0; white-space: nowrap; }
+  header input { flex: 1; max-width: 420px; margin-left: auto; }
+  .layout { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 57px); }
+  aside { border-right: 1px solid var(--line); padding: 12px 8px; overflow: auto; max-height: calc(100vh - 57px); position: sticky; top: 0; }
+  aside .head { display: flex; justify-content: space-between; align-items: center; padding: 0 8px 8px; }
+  .tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+  .tree ul { padding-left: 14px; }
+  .node { display: flex; align-items: center; gap: 4px; padding: 3px 6px; border-radius: 6px; cursor: pointer; user-select: none; }
+  .node:hover { background: var(--hover); }
+  .node.cur { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .node .twisty { width: 14px; text-align: center; color: var(--muted); font-size: 10px; }
+  .node .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .node .count { color: var(--muted); font-size: 12px; font-weight: normal; }
+  .node .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--err); flex: none; }
+  .drop-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft) !important; }
 
-  .queue:empty { display: none; }
-  .queue { margin-top: 12px; display: grid; gap: 6px; }
-  .qitem { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 13px; }
-  .qitem .bar { grid-column: 1 / -1; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
-  .qitem .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-  .qitem.done .bar i { background: var(--ok); }
-  .qitem.fail .bar i { background: var(--err); width: 100%; }
-  .qitem .msg { grid-column: 1 / -1; color: var(--err); }
-
-  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
-  .toolbar input { flex: 1; min-width: 160px; }
+  main { padding: 16px 20px 60px; min-width: 0; position: relative; }
+  .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: 15px; flex: 1; min-width: 200px; }
+  .crumbs a { color: var(--text); text-decoration: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+  .crumbs a:hover { background: var(--hover); }
+  .crumbs a:last-child { font-weight: 600; }
+  .crumbs .sep { color: var(--muted); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
   .chip { border-radius: 999px; padding: 2px 10px; font-size: 13px; }
   .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .selbar { display: flex; align-items: center; gap: 8px; background: var(--accent-soft); border-radius: 8px; padding: 6px 10px; margin-bottom: 10px; }
+  .selbar span { flex: 1; color: var(--accent); }
 
-  .banner { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
-  .list { display: grid; }
-  .doc { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 2px; border-top: 1px solid var(--line); }
-  .doc:first-child { border-top: none; }
-  .doc a { color: var(--text); text-decoration: none; word-break: break-all; font-weight: 500; }
-  .doc a:hover { color: var(--accent); }
-  .doc .side { display: flex; gap: 6px; align-items: center; justify-content: flex-end; }
-  .doc .err { grid-column: 1 / -1; color: var(--err); font-size: 12px; word-break: break-all; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  .row { display: grid; grid-template-columns: 24px 22px 1fr auto; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: none; }
+  .row:hover { background: var(--hover); }
+  .row.selected { background: var(--accent-soft); }
+  .row .main { min-width: 0; }
+  .row .title { display: block; color: var(--text); text-decoration: none; word-break: break-all; font-weight: 500; cursor: pointer; }
+  .row .title:hover { color: var(--accent); }
+  .row .meta { color: var(--muted); font-size: 12px; }
+  .row .side { display: flex; align-items: center; gap: 4px; }
+  .row .err { grid-column: 3 / -1; color: var(--err); font-size: 12px; word-break: break-all; }
+  .row .err.dup { color: var(--muted); }
   .badge { font-size: 12px; border-radius: 4px; padding: 1px 8px; white-space: nowrap; }
   .s-ok { background: var(--ok-soft); color: var(--ok); }
   .s-error { background: var(--err-soft); color: var(--err); }
   .s-pending, .s-indexing, .s-removing { background: var(--warn-soft); color: var(--warn); }
   .s-duplicate { background: var(--line); color: var(--muted); }
-  .doc .err.dup { color: var(--muted); }
-  .empty { text-align: center; padding: 30px 0; }
-  @media (max-width: 560px) {
-    .doc { grid-template-columns: 1fr; }
-    .doc .side { justify-content: flex-start; }
+  .empty { text-align: center; padding: 40px 0; color: var(--muted); }
+  .menu { position: absolute; z-index: 20; background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+          box-shadow: 0 6px 24px rgba(0,0,0,.15); padding: 4px; min-width: 120px; }
+  .menu button { display: block; width: 100%; text-align: left; border: none; background: none; padding: 6px 10px; border-radius: 4px; }
+  .menu button:hover { background: var(--hover); }
+  .menu button.danger { color: var(--err); }
+
+  .queue { display: grid; gap: 6px; margin-bottom: 12px; }
+  .queue:empty { display: none; }
+  .qitem { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 13px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .qitem .bar2 { grid-column: 1 / -1; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .qitem .bar2 i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .qitem.done .bar2 i { background: var(--ok); }
+  .qitem.fail .bar2 i { background: var(--err); width: 100%; }
+  .qitem .msg { grid-column: 1 / -1; color: var(--err); }
+  .banner { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .dropzone { position: absolute; inset: 8px; border: 2px dashed var(--accent); border-radius: 12px; background: color-mix(in srgb, var(--accent-soft) 85%, transparent);
+              display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--accent); z-index: 10; pointer-events: none; }
+
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); padding: 16px; width: min(420px, 92vw); }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog h3 { margin: 0 0 10px; font-size: 16px; }
+  dialog .picker { max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px; }
+  dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  @media (max-width: 760px) {
+    header { flex-wrap: wrap; padding: 10px 12px; }
+    header input { max-width: none; order: 3; flex-basis: 100%; }
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; max-height: 200px; border-right: none; border-bottom: 1px solid var(--line); }
+    main { padding: 12px; }
+    .row { grid-template-columns: 24px 22px 1fr; }
+    .row .side { grid-column: 3; justify-content: flex-start; }
   }
 </style>
 </head>
 <body>
-<main>
-  <section id="login" class="card hidden">
+<section id="login" class="hidden">
+  <h1>localbrain 文档库</h1>
+  <p id="login-hint" class="muted small">输入 .env 里设置的 WEB_PASSWORD</p>
+  <form id="login-form">
+    <input id="password" type="password" placeholder="密码" autocomplete="current-password" required>
+    <button class="primary">登录</button>
+  </form>
+  <p id="login-err" class="small" style="color: var(--err)"></p>
+</section>
+
+<div id="app" class="hidden">
+  <header>
     <h1>localbrain 文档库</h1>
-    <p id="login-hint" class="muted small">输入 .env 里设置的 WEB_PASSWORD</p>
-    <form id="login-form">
-      <input id="password" type="password" placeholder="密码" autocomplete="current-password" required>
-      <button class="primary">登录</button>
-    </form>
-    <p id="login-err" class="small" style="color: var(--err)"></p>
-  </section>
-
-  <div id="app" class="hidden">
-    <header>
-      <h1>localbrain 文档库</h1>
-      <button id="logout">退出</button>
-    </header>
-
-    <section class="card">
-      <div id="drop" class="drop">
-        <p>把文件拖到这里，或者</p>
-        <button class="primary" id="pick">选择文件</button>
+    <input id="search" type="search" placeholder="在所有文件夹里搜索文件名">
+    <button id="logout" class="link">退出</button>
+  </header>
+  <div class="layout">
+    <aside>
+      <div class="head"><span class="muted small">文件夹</span><button class="link" id="tree-new" title="在当前文件夹下新建">＋ 新建</button></div>
+      <ul class="tree" id="tree"></ul>
+    </aside>
+    <main id="main">
+      <div class="bar">
+        <div class="crumbs" id="crumbs"></div>
+        <button id="new-folder">新建文件夹</button>
+        <button id="up-folder">上传文件夹</button>
+        <button id="up-files" class="primary">上传文件</button>
         <input id="files" type="file" multiple class="hidden">
+        <input id="dir" type="file" webkitdirectory multiple class="hidden">
       </div>
-      <div class="target">
-        <span class="muted">存放到子目录</span>
-        <input id="folder" type="text" list="folders" placeholder="可选，例如 书籍/Linux">
-        <datalist id="folders"></datalist>
-      </div>
-      <details class="small muted">
-        <summary>支持的格式</summary>
-        <p id="formats"></p>
-        <p>上传后由 watch 服务自动入库，大部头的书需要几分钟。.xls / .ppt 需要装 LibreOffice；有 DRM 的电子书需要先去掉 DRM。</p>
-      </details>
       <div id="queue" class="queue"></div>
-    </section>
-
-    <section class="card">
       <div id="stalled" class="banner small hidden">
-        有文件等了一分多钟还没开始入库，请确认 watch 服务在运行：
-        <code>launchctl print gui/$(id -u)/com.localbrain.watch</code>
+        有文件等了一分多钟还没开始入库，请确认 watch 服务在运行：<code>launchctl print gui/$(id -u)/com.localbrain.watch</code>
       </div>
-      <div class="toolbar">
-        <input id="search" type="search" placeholder="按文件名筛选">
-        <span id="chips"></span>
+      <div class="bar">
+        <div class="chips" id="chips"></div>
+        <span class="muted small" id="hint" style="margin-left:auto">可以把文件或文件夹直接拖进来上传，拖到左边的文件夹里移动</span>
       </div>
-      <div id="list" class="list"></div>
-    </section>
+      <div id="selbar" class="selbar hidden">
+        <span id="selcount"></span>
+        <button id="sel-move">移动到…</button>
+        <button id="sel-delete" class="danger">删除</button>
+        <button id="sel-clear" class="link">取消选择</button>
+      </div>
+      <div class="panel" id="list"></div>
+      <div id="dropzone" class="dropzone hidden">松开鼠标，上传到「<b id="dropname"></b>」</div>
+    </main>
   </div>
-</main>
+</div>
+
+<dialog id="move-dialog">
+  <h3 id="move-title">移动到</h3>
+  <div class="picker" id="picker"></div>
+  <div class="actions">
+    <button id="move-new" class="link" style="margin-right:auto">＋ 新建文件夹</button>
+    <button id="move-cancel">取消</button>
+    <button id="move-ok" class="primary">移动到这里</button>
+  </div>
+</dialog>
 
 <script>
 const $ = (id) => document.getElementById(id);
 const STATUS = { ok: "已入库", error: "失败", indexing: "入库中", pending: "等待入库", removing: "移除中", duplicate: "重复" };
 const BUSY = new Set(["indexing", "pending", "removing"]);
-let docs = [], filter = "all", uploading = 0, timer = null;
+const ICON = {
+  folder: '<svg class="icon" viewBox="0 0 24 24" fill="var(--folder)"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  file: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.6"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>',
+};
+let docs = [], folders = [], suffixes = [], cur = "", filter = "all", timer = null, uploading = 0;
+const selected = new Set();   // "d:路径" 是文件夹，"f:路径" 是文件
+const expanded = new Set([""]);
 const firstSeenPending = new Map();
+
+// ---------- 工具 ----------
 
 function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
     if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
     else if (k === "class") el.className = v;
+    else if (k === "html") el.innerHTML = v;
     else el.setAttribute(k, v);
   }
   for (const c of children.flat()) if (c != null && c !== false) el.append(c);
   return el;
 }
+const parentOf = (p) => (p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
+const baseName = (p) => p.slice(p.lastIndexOf("/") + 1);
+const join = (dir, name) => (dir ? `${dir}/${name}` : name);
+const under = (p, dir) => !dir || p === dir || p.startsWith(dir + "/");
 
 async function api(method, url, body) {
   const opts = { method, headers: {} };
   if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
   const resp = await fetch(url, opts);
   if (resp.status === 401 || resp.status === 503) { showLogin(await detail(resp)); throw new Error("login"); }
-  if (!resp.ok) throw new Error(await detail(resp));
+  if (!resp.ok) { const e = new Error(await detail(resp)); e.status = resp.status; throw e; }
   return resp.json();
 }
-
 async function detail(resp) {
   try { return (await resp.json()).detail || resp.statusText; } catch { return resp.statusText; }
 }
+function fail(what, e) { if (e.message !== "login") alert(`${what}失败：${e.message}`); }
+
+function fmtSize(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1 << 20) return (n / 1024).toFixed(0) + " KB";
+  if (n < 1 << 30) return (n / (1 << 20)).toFixed(1) + " MB";
+  return (n / (1 << 30)).toFixed(2) + " GB";
+}
+function fmtTime(ts) {
+  const diff = Date.now() / 1000 - ts;
+  if (diff < 60) return "刚刚";
+  if (diff < 3600) return Math.floor(diff / 60) + " 分钟前";
+  if (diff < 86400) return Math.floor(diff / 3600) + " 小时前";
+  const d = new Date(ts * 1000), p = (x) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// ---------- 登录 ----------
 
 function showLogin(msg) {
   $("app").classList.add("hidden");
@@ -172,7 +253,6 @@ function showLogin(msg) {
   if (msg && msg !== "请先登录") $("login-hint").textContent = msg;
   clearTimeout(timer);
 }
-
 $("login-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("login-err").textContent = "";
@@ -186,20 +266,22 @@ $("login-form").addEventListener("submit", async (e) => {
   $("login").classList.add("hidden");
   refresh();
 });
-
 $("logout").addEventListener("click", async () => { await fetch("api/logout", { method: "POST" }); showLogin(); });
 
-// ---------- 文档列表 ----------
+// ---------- 数据 ----------
 
 async function refresh() {
   clearTimeout(timer);
   try {
     const data = await api("GET", "api/docs");
-    docs = data.docs;
+    docs = data.docs; folders = data.folders; suffixes = data.suffixes;
     $("app").classList.remove("hidden");
-    $("formats").textContent = data.suffixes.join("  ");
-    $("files").setAttribute("accept", data.suffixes.join(","));
-    $("folders").replaceChildren(...data.folders.map((f) => h("option", { value: f })));
+    $("files").setAttribute("accept", suffixes.join(","));
+    if (cur && !folders.includes(cur)) go(parentOf(cur));   // 当前文件夹被删或改名了
+    for (const k of [...selected]) {
+      const p = k.slice(2);
+      if (k[0] === "d" ? !folders.includes(p) : !docs.some((d) => d.path === p)) selected.delete(k);
+    }
     render();
   } catch (e) {
     if (e.message === "login") return;
@@ -209,105 +291,346 @@ async function refresh() {
   timer = setTimeout(refresh, busy ? 3000 : 20000);
 }
 
-function render() {
-  const counts = { all: docs.length, ok: 0, busy: 0, error: 0 };
-  for (const d of docs) {
-    if (d.status === "ok") counts.ok++;
-    else if (d.status === "error") counts.error++;
-    else if (BUSY.has(d.status)) counts.busy++;
-  }
-  const chip = (key, label) => h("button", {
-    class: "chip" + (filter === key ? " active" : ""),
-    onclick: () => { filter = key; render(); },
-  }, `${label} ${counts[key]}`);
-  $("chips").replaceChildren(chip("all", "全部"), " ", chip("ok", "已入库"), " ", chip("busy", "处理中"), " ", chip("error", "失败"));
+function folderStats(dir) {
+  const inside = docs.filter((d) => under(d.path, dir) && d.path !== dir);
+  return { count: inside.length, error: inside.filter((d) => d.status === "error").length,
+           busy: inside.filter((d) => BUSY.has(d.status)).length };
+}
 
+// ---------- 导航（当前文件夹记在地址栏 #/ 后面，刷新和浏览器后退都能用） ----------
+
+function go(dir) {
+  location.hash = "#/" + dir.split("/").map(encodeURIComponent).join("/");
+}
+window.addEventListener("hashchange", () => {
+  cur = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
+  for (let p = cur; p; p = parentOf(p)) expanded.add(p);
+  selected.clear();
+  render();
+});
+cur = decodeURIComponent(location.hash.replace(/^#\/?/, ""));
+for (let p = cur; p; p = parentOf(p)) expanded.add(p);
+
+// ---------- 渲染 ----------
+
+function render() {
+  renderTree();
+  renderCrumbs();
+  renderChips();
+  renderList();
+  renderSelbar();
   const now = Date.now();
   for (const d of docs) if (d.status === "pending" && !firstSeenPending.has(d.path)) firstSeenPending.set(d.path, now);
   for (const p of [...firstSeenPending.keys()]) if (!docs.some((d) => d.path === p && d.status === "pending")) firstSeenPending.delete(p);
   $("stalled").classList.toggle("hidden", ![...firstSeenPending.values()].some((t) => now - t > 70000));
-
-  const q = $("search").value.trim().toLowerCase();
-  const shown = docs
-    .filter((d) => filter === "all" || (filter === "busy" ? BUSY.has(d.status) : d.status === filter))
-    .filter((d) => !q || d.path.toLowerCase().includes(q))
-    .sort((a, b) => (BUSY.has(b.status) - BUSY.has(a.status)) || (b.status === "error") - (a.status === "error")
-                    || b.updated_at - a.updated_at);
-  $("list").replaceChildren(...(shown.length ? shown.map(row)
-    : [h("p", { class: "empty muted" }, docs.length ? "没有符合条件的文档" : "还没有文档，从上面上传")]));
 }
 
-function row(d) {
-  const slash = d.path.lastIndexOf("/");
-  const name = d.path.slice(slash + 1), folder = slash >= 0 ? d.path.slice(0, slash) : "";
-  const meta = [fmtSize(d.size), d.status === "ok" ? `${d.chunks} 段` : null, fmtTime(d.updated_at)].filter(Boolean).join(" · ");
-  const actions = [];
-  if (d.status === "error") actions.push(h("button", { onclick: () => retry(d) }, "重试"));
-  if (d.status !== "removing") actions.push(h("button", { class: "danger", onclick: () => remove(d) }, "删除"));
-  return h("div", { class: "doc" },
-    h("div", {},
-      d.status === "removing" ? h("span", {}, name)
-        : h("a", { href: "api/raw?path=" + encodeURIComponent(d.path), target: "_blank", rel: "noopener" }, name),
-      h("div", { class: "muted small" }, [folder, meta].filter(Boolean).join("  ·  "))),
-    h("div", { class: "side" }, h("span", { class: "badge s-" + d.status }, STATUS[d.status] || d.status), ...actions),
+function renderTree() {
+  const node = (dir, label, depth) => {
+    const kids = folders.filter((f) => parentOf(f) === dir);
+    const open = expanded.has(dir);
+    const st = folderStats(dir);
+    const row = h("div", { class: "node" + (dir === cur ? " cur" : ""), onclick: () => go(dir) },
+      h("span", { class: "twisty", onclick: (e) => { e.stopPropagation(); open ? expanded.delete(dir) : expanded.add(dir); renderTree(); } },
+        kids.length ? (open ? "▾" : "▸") : ""),
+      h("span", { html: ICON.folder }),
+      h("span", { class: "name", title: label }, label),
+      st.error ? h("span", { class: "dot", title: `${st.error} 个文件入库失败` }) : null,
+      h("span", { class: "count" }, String(st.count)));
+    dropTarget(row, dir);
+    return h("li", {}, row, open && kids.length ? h("ul", {}, kids.map((k) => node(k, baseName(k), depth + 1))) : null);
+  };
+  $("tree").replaceChildren(node("", "全部文档", 0));
+}
+
+function renderCrumbs() {
+  const items = [h("a", { onclick: () => go("") }, "全部文档")];
+  dropTarget(items[0], "");
+  let acc = "";
+  for (const part of cur ? cur.split("/") : []) {
+    acc = join(acc, part);
+    const target = acc;
+    const a = h("a", { onclick: () => go(target) }, part);
+    dropTarget(a, target);
+    items.push(h("span", { class: "sep" }, "/"), a);
+  }
+  $("crumbs").replaceChildren(...items);
+}
+
+function globalMode() { return $("search").value.trim() !== "" || filter !== "all"; }
+
+function renderChips() {
+  const scope = docs.filter((d) => under(d.path, cur) && d.path !== cur);
+  const n = { all: scope.length, ok: 0, busy: 0, error: 0, duplicate: 0 };
+  for (const d of scope) {
+    if (d.status === "ok") n.ok++;
+    else if (d.status === "error") n.error++;
+    else if (d.status === "duplicate") n.duplicate++;
+    else if (BUSY.has(d.status)) n.busy++;
+  }
+  const chip = (key, label) => n[key] || key === "all" || key === filter ? h("button", {
+    class: "chip" + (filter === key ? " active" : ""),
+    onclick: () => { filter = key; selected.clear(); render(); },
+  }, `${label} ${n[key]}`) : null;
+  $("chips").replaceChildren(...[chip("all", "全部"), chip("ok", "已入库"), chip("busy", "处理中"), chip("error", "失败"), chip("duplicate", "重复")].filter(Boolean));
+}
+
+function matchesFilter(d) {
+  if (filter === "all") return true;
+  if (filter === "busy") return BUSY.has(d.status);
+  return d.status === filter;
+}
+
+function renderList() {
+  const q = $("search").value.trim().toLowerCase();
+  let rows = [];
+  if (globalMode()) {
+    // 搜索或按状态筛选时，看当前文件夹及其下所有子文件夹
+    const hits = docs.filter((d) => under(d.path, cur) && d.path !== cur && matchesFilter(d) && (!q || d.path.toLowerCase().includes(q)));
+    const dirs = q && filter === "all" ? folders.filter((f) => under(f, cur) && f !== cur && baseName(f).toLowerCase().includes(q)) : [];
+    rows = [...dirs.map((f) => folderRow(f, true)), ...sortDocs(hits).map((d) => fileRow(d, true))];
+  } else {
+    const dirs = folders.filter((f) => parentOf(f) === cur).sort((a, b) => a.localeCompare(b, "zh"));
+    const files = docs.filter((d) => parentOf(d.path) === cur);
+    rows = [...dirs.map((f) => folderRow(f, false)), ...sortDocs(files).map((d) => fileRow(d, false))];
+  }
+  if (!rows.length) {
+    rows = [h("div", { class: "empty" }, globalMode() ? "没有符合条件的文件" : "这个文件夹是空的，可以上传文件或把文件拖进来")];
+  }
+  $("list").replaceChildren(...rows);
+}
+
+function sortDocs(list) {
+  return [...list].sort((a, b) => (BUSY.has(b.status) - BUSY.has(a.status)) || (b.status === "error") - (a.status === "error")
+                                  || a.path.localeCompare(b.path, "zh"));
+}
+
+function checkbox(key) {
+  return h("input", { type: "checkbox", checked: selected.has(key) ? "" : null, onclick: (e) => e.stopPropagation(),
+                      onchange: (e) => { e.target.checked ? selected.add(key) : selected.delete(key); renderList(); renderSelbar(); } });
+}
+
+function folderRow(dir, showPath) {
+  const key = "d:" + dir, st = folderStats(dir);
+  const meta = [st.count ? `${st.count} 个文件` : "空文件夹", st.busy ? `${st.busy} 个处理中` : null, showPath && parentOf(dir) ? parentOf(dir) : null].filter(Boolean).join(" · ");
+  const row = h("div", { class: "row" + (selected.has(key) ? " selected" : ""), draggable: "true" },
+    checkbox(key),
+    h("span", { html: ICON.folder }),
+    h("div", { class: "main" }, h("a", { class: "title", onclick: () => go(dir) }, baseName(dir)), h("div", { class: "meta" }, meta)),
+    h("div", { class: "side" },
+      st.error ? h("span", { class: "badge s-error" }, `${st.error} 个失败`) : null,
+      menuButton([
+        ["重命名", () => renameItem(dir, true)],
+        ["移动到…", () => openMove([key])],
+        ["删除", () => deleteItems([key]), true],
+      ])));
+  dragSource(row, key);
+  dropTarget(row, dir);
+  return row;
+}
+
+function fileRow(d, showPath) {
+  const key = "f:" + d.path;
+  const href = d.status === "ok" ? "open?path=" + encodeURIComponent(d.path) : "api/raw?path=" + encodeURIComponent(d.path);
+  const meta = [showPath ? parentOf(d.path) || "根目录" : null, fmtSize(d.size), d.status === "ok" ? `${d.chunks} 段` : null, fmtTime(d.updated_at)].filter(Boolean).join(" · ");
+  const items = [];
+  if (d.status === "error") items.push(["重试入库", () => retry(d)]);
+  if (d.status !== "removing") {
+    items.push(["重命名", () => renameItem(d.path, false)], ["移动到…", () => openMove([key])], ["下载原文件", () => window.open("api/raw?path=" + encodeURIComponent(d.path))], ["删除", () => deleteItems([key]), true]);
+  }
+  const row = h("div", { class: "row" + (selected.has(key) ? " selected" : ""), draggable: d.status !== "removing" ? "true" : null },
+    d.status !== "removing" ? checkbox(key) : h("span"),
+    h("span", { html: ICON.file }),
+    h("div", { class: "main" },
+      d.status === "removing" ? h("span", { class: "title" }, baseName(d.path))
+        : h("a", { class: "title", href, target: "_blank", rel: "noopener" }, baseName(d.path)),
+      h("div", { class: "meta" }, meta)),
+    h("div", { class: "side" }, h("span", { class: "badge s-" + d.status }, STATUS[d.status] || d.status), items.length ? menuButton(items) : null),
     d.error ? h("div", { class: d.status === "duplicate" ? "err dup" : "err" }, d.error) : null);
+  if (d.status !== "removing") dragSource(row, key);
+  return row;
+}
+
+// ---------- 菜单 ----------
+
+let openMenu = null;
+function closeMenu() { openMenu?.remove(); openMenu = null; }
+document.addEventListener("click", closeMenu);
+window.addEventListener("scroll", closeMenu, true);
+function menuButton(items) {
+  return h("button", { class: "link", title: "更多操作", onclick: (e) => {
+    e.stopPropagation();
+    closeMenu();
+    const r = e.currentTarget.getBoundingClientRect();
+    openMenu = h("div", { class: "menu" }, items.map(([label, fn, danger]) =>
+      h("button", { class: danger ? "danger" : null, onclick: (ev) => { ev.stopPropagation(); closeMenu(); fn(); } }, label)));
+    document.body.append(openMenu);
+    const w = openMenu.offsetWidth;
+    openMenu.style.left = Math.max(8, Math.min(r.right - w, innerWidth - w - 8)) + "px";
+    openMenu.style.top = (r.bottom + scrollY + 4) + "px";
+  } }, "⋯");
+}
+
+// ---------- 选择、移动、删除、重命名 ----------
+
+function renderSelbar() {
+  $("selbar").classList.toggle("hidden", !selected.size);
+  const nd = [...selected].filter((k) => k[0] === "d").length, nf = selected.size - nd;
+  $("selcount").textContent = "已选 " + [nd ? `${nd} 个文件夹` : null, nf ? `${nf} 个文件` : null].filter(Boolean).join("、");
+}
+$("sel-clear").addEventListener("click", () => { selected.clear(); render(); });
+$("sel-move").addEventListener("click", () => openMove([...selected]));
+$("sel-delete").addEventListener("click", () => deleteItems([...selected]));
+
+async function moveItems(keys, to) {
+  const paths = keys.map((k) => k.slice(2)).filter((p) => parentOf(p) !== to);
+  if (!paths.length) return;
+  try {
+    await api("POST", "api/move", { paths, to });
+    selected.clear();
+    refresh();
+  } catch (e) { fail("移动", e); }
+}
+
+async function deleteItems(keys) {
+  const dirs = keys.filter((k) => k[0] === "d").map((k) => k.slice(2));
+  const files = keys.filter((k) => k[0] === "f").map((k) => k.slice(2)).filter((p) => !dirs.some((d) => under(p, d)));
+  const inDirs = docs.filter((d) => dirs.some((dir) => under(d.path, dir))).length;
+  const what = [dirs.length ? `${dirs.length} 个文件夹` + (inDirs ? `（里面共 ${inDirs} 个文件）` : "") : null, files.length ? `${files.length} 个文件` : null].filter(Boolean).join("和");
+  const one = keys.length === 1 ? `「${baseName(keys[0].slice(2))}」` : what;
+  if (!confirm(`删除${one}？文件会从文档目录删掉，同时移出知识库。`)) return;
+  try {
+    for (const d of dirs) await api("DELETE", `api/folders?path=${encodeURIComponent(d)}&recursive=true`);
+    for (const f of files) await api("DELETE", "api/files?path=" + encodeURIComponent(f));
+    selected.clear();
+  } catch (e) { fail("删除", e); }
+  refresh();
+}
+
+async function renameItem(path, isDir) {
+  const old = baseName(path);
+  const name = prompt(isDir ? "新的文件夹名" : "新的文件名（保留扩展名）", old);
+  if (!name || name.trim() === old) return;
+  try { await api("POST", "api/rename", { path, name: name.trim() }); if (isDir && under(cur, path)) go(join(parentOf(path), name.trim()) + cur.slice(path.length)); refresh(); }
+  catch (e) { fail("重命名", e); }
 }
 
 async function retry(d) {
-  try { await api("POST", "api/retry?path=" + encodeURIComponent(d.path)); refresh(); }
-  catch (e) { if (e.message !== "login") alert("重试失败：" + e.message); }
+  try { await api("POST", "api/retry?path=" + encodeURIComponent(d.path)); refresh(); } catch (e) { fail("重试", e); }
 }
 
-async function remove(d) {
-  if (!confirm(`删除「${d.path}」？文件会从文档目录删掉，同时移出知识库。`)) return;
-  try { await api("DELETE", "api/files?path=" + encodeURIComponent(d.path)); refresh(); }
-  catch (e) { if (e.message !== "login") alert("删除失败：" + e.message); }
+async function newFolder(parent) {
+  const name = prompt(parent ? `在「${baseName(parent)}」下新建文件夹` : "新建文件夹", "");
+  if (!name || !name.trim()) return null;
+  try { const r = await api("POST", "api/folders", { path: join(parent, name.trim()) }); expanded.add(parent); await refresh(); return r.path; }
+  catch (e) { fail("新建文件夹", e); return null; }
+}
+$("new-folder").addEventListener("click", () => newFolder(cur));
+$("tree-new").addEventListener("click", () => newFolder(cur));
+
+// 移动对话框：选目标文件夹
+let moveKeys = [], moveTarget = "";
+function openMove(keys) {
+  moveKeys = keys; moveTarget = cur;
+  $("move-title").textContent = `把${keys.length === 1 ? `「${baseName(keys[0].slice(2))}」` : `选中的 ${keys.length} 项`}移动到`;
+  renderPicker();
+  $("move-dialog").showModal();
+}
+function renderPicker() {
+  const blocked = moveKeys.filter((k) => k[0] === "d").map((k) => k.slice(2));
+  const all = ["", ...folders].filter((f) => !blocked.some((b) => under(f, b)));
+  $("picker").replaceChildren(...all.map((f) => h("div", {
+    class: "node" + (f === moveTarget ? " cur" : ""), style: `padding-left:${(f ? f.split("/").length : 0) * 14 + 6}px`,
+    onclick: () => { moveTarget = f; renderPicker(); }, ondblclick: () => { moveTarget = f; $("move-ok").click(); },
+  }, h("span", { html: ICON.folder }), h("span", { class: "name" }, f ? baseName(f) : "全部文档（根目录）"))));
+}
+$("move-cancel").addEventListener("click", () => $("move-dialog").close());
+$("move-ok").addEventListener("click", () => { $("move-dialog").close(); moveItems(moveKeys, moveTarget); });
+$("move-new").addEventListener("click", async () => { const p = await newFolder(moveTarget); if (p) { moveTarget = p; renderPicker(); } });
+
+// ---------- 拖放：行拖到文件夹 = 移动；从电脑拖进来 = 上传 ----------
+
+const DRAG_TYPE = "application/x-localbrain";
+function dragSource(row, key) {
+  row.addEventListener("dragstart", (e) => {
+    const keys = selected.has(key) ? [...selected] : [key];
+    e.dataTransfer.setData(DRAG_TYPE, JSON.stringify(keys));
+    e.dataTransfer.effectAllowed = "move";
+  });
+}
+function dropTarget(el, dir) {
+  el.addEventListener("dragover", (e) => {
+    if (!e.dataTransfer.types.includes(DRAG_TYPE)) return;
+    e.preventDefault(); e.stopPropagation(); el.classList.add("drop-target");
+  });
+  el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
+  el.addEventListener("drop", (e) => {
+    el.classList.remove("drop-target");
+    const data = e.dataTransfer.getData(DRAG_TYPE);
+    if (!data) return;
+    e.preventDefault(); e.stopPropagation();
+    const keys = JSON.parse(data).filter((k) => !(k[0] === "d" && under(dir, k.slice(2))));
+    if (keys.length) moveItems(keys, dir);
+  });
 }
 
-function fmtSize(n) {
-  if (n < 1024) return n + " B";
-  if (n < 1 << 20) return (n / 1024).toFixed(0) + " KB";
-  if (n < 1 << 30) return (n / (1 << 20)).toFixed(1) + " MB";
-  return (n / (1 << 30)).toFixed(2) + " GB";
+const main = $("main");
+let dragDepth = 0;
+const fromComputer = (e) => e.dataTransfer.types.includes("Files") && !e.dataTransfer.types.includes(DRAG_TYPE);
+main.addEventListener("dragenter", (e) => { if (fromComputer(e)) { dragDepth++; $("dropname").textContent = cur || "全部文档"; $("dropzone").classList.remove("hidden"); } });
+main.addEventListener("dragleave", (e) => { if (fromComputer(e) && --dragDepth <= 0) { dragDepth = 0; $("dropzone").classList.add("hidden"); } });
+main.addEventListener("dragover", (e) => { if (fromComputer(e)) e.preventDefault(); });
+main.addEventListener("drop", async (e) => {
+  if (!fromComputer(e)) return;
+  e.preventDefault(); dragDepth = 0; $("dropzone").classList.add("hidden");
+  // 拖进来的可能有文件夹，逐层读出里面的文件，保留目录结构
+  const entries = [...e.dataTransfer.items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean);
+  const files = entries.length ? (await Promise.all(entries.map((en) => readEntry(en, "")))).flat()
+                               : [...e.dataTransfer.files].map((f) => ({ file: f, rel: f.name }));
+  enqueue(files);
+});
+async function readEntry(entry, prefix) {
+  if (entry.isFile) return [{ file: await new Promise((ok, err) => entry.file(ok, err)), rel: prefix + entry.name }];
+  const reader = entry.createReader(), out = [];
+  for (;;) {   // readEntries 一次最多返回 100 个，要读到空为止
+    const batch = await new Promise((ok, err) => reader.readEntries(ok, err));
+    if (!batch.length) break;
+    for (const child of batch) out.push(...await readEntry(child, prefix + entry.name + "/"));
+  }
+  return out;
 }
-
-function fmtTime(ts) {
-  const diff = Date.now() / 1000 - ts;
-  if (diff < 60) return "刚刚";
-  if (diff < 3600) return Math.floor(diff / 60) + " 分钟前";
-  if (diff < 86400) return Math.floor(diff / 3600) + " 小时前";
-  const d = new Date(ts * 1000), p = (x) => String(x).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
-$("search").addEventListener("input", render);
 
 // ---------- 上传 ----------
 
-const drop = $("drop");
-$("pick").addEventListener("click", () => $("files").click());
-$("files").addEventListener("change", (e) => { enqueue([...e.target.files]); e.target.value = ""; });
-drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
-drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); enqueue([...e.dataTransfer.files]); });
+$("up-files").addEventListener("click", () => $("files").click());
+$("up-folder").addEventListener("click", () => $("dir").click());
+$("files").addEventListener("change", (e) => { enqueue([...e.target.files].map((f) => ({ file: f, rel: f.name }))); e.target.value = ""; });
+$("dir").addEventListener("change", (e) => { enqueue([...e.target.files].map((f) => ({ file: f, rel: f.webkitRelativePath || f.name }))); e.target.value = ""; });
 
 const pendingUploads = [];
 let draining = false;
-
-function enqueue(files) {
-  const folder = $("folder").value.trim().replace(/^\/+|\/+$/g, "");
-  for (const file of files) {
-    const path = folder ? `${folder}/${file.name}` : file.name;
-    const bar = h("i");
-    const status = h("span", { class: "muted" }, "等待上传");
-    const msg = h("div", { class: "msg hidden" });
-    const item = h("div", { class: "qitem" }, h("span", {}, path), status, h("div", { class: "bar" }, bar), msg);
+function enqueue(items) {
+  const ok = [], skipped = [];
+  for (const it of items) {
+    const name = baseName(it.rel), dot = name.lastIndexOf(".");
+    const ext = dot > 0 ? name.slice(dot).toLowerCase() : "";
+    if (name.startsWith(".") || name.startsWith("~$")) continue;           // .DS_Store、Office 临时文件
+    (suffixes.includes(ext) ? ok : skipped).push(it);
+  }
+  if (skipped.length) {
+    const names = skipped.slice(0, 5).map((s) => baseName(s.rel)).join("、");
+    alert(`有 ${skipped.length} 个文件格式不支持，已跳过：${names}${skipped.length > 5 ? " 等" : ""}`);
+  }
+  const target = cur;
+  for (const { file, rel } of ok) {
+    const path = join(target, rel);
+    const bar = h("i"), status = h("span", { class: "muted" }, "等待上传"), msg = h("div", { class: "msg hidden" });
+    const item = h("div", { class: "qitem" }, h("span", {}, path), status, h("div", { class: "bar2" }, bar), msg);
     $("queue").prepend(item);
     pendingUploads.push({ file, path, item, bar, status, msg });
   }
   drain();
 }
-
 async function drain() {
   if (draining) return;
   draining = true;
@@ -315,11 +638,10 @@ async function drain() {
     const job = pendingUploads.shift();
     uploading++;
     try { await uploadOne(job, false); } finally { uploading--; }
-    refresh();
+    if (!pendingUploads.length || pendingUploads.length % 5 === 0) refresh();
   }
   draining = false;
 }
-
 async function uploadOne(job, overwrite) {
   const { file, path, item, bar, status, msg } = job;
   status.textContent = "上传中";
@@ -333,12 +655,12 @@ async function uploadOne(job, overwrite) {
   });
   if (result.status === 409 && !overwrite) {
     if (confirm(`「${path}」已经存在，覆盖它吗？`)) return uploadOne(job, true);
-    item.classList.add("fail"); status.textContent = "已跳过"; return;
+    item.classList.add("fail"); status.textContent = "已跳过"; setTimeout(() => item.remove(), 5000); return;
   }
-  if (result.status === 401 || result.status === 503) { showLogin(); }
+  if (result.status === 401 || result.status === 503) showLogin();
   if (result.status >= 200 && result.status < 300) {
     item.classList.add("done"); status.textContent = "已上传，等待入库"; bar.style.width = "100%";
-    setTimeout(() => item.remove(), 8000);
+    setTimeout(() => item.remove(), 5000);
     return;
   }
   let reason = result.status === 0 ? "网络错误" : `HTTP ${result.status}`;
@@ -346,6 +668,9 @@ async function uploadOne(job, overwrite) {
   item.classList.add("fail"); status.textContent = "失败";
   msg.textContent = reason; msg.classList.remove("hidden");
 }
+
+$("search").addEventListener("input", () => { selected.clear(); render(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && selected.size) { selected.clear(); render(); } });
 
 refresh();
 </script>

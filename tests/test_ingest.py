@@ -56,3 +56,35 @@ def test_files_still_being_written_are_deferred(env):
     ing = Ingestor(get_settings())
     assert ing.sync(settle=60) is True
     assert status(ing) == {}
+
+
+def test_moving_and_renaming_does_not_reingest(env, monkeypatch):
+    (env / "a.md").write_text("# 标题\n\n正文内容。", encoding="utf-8")
+    (env / "书").mkdir()
+    (env / "书" / "b.md").write_text("另一篇。", encoding="utf-8")
+    ing = Ingestor(get_settings())
+    ing.sync()
+    before = ing.store.count()
+
+    def no_reingest(jobs):
+        raise AssertionError(f"不该重新入库：{[j.rel for j in jobs]}")
+
+    monkeypatch.setattr(ing, "_ingest_all", no_reingest)
+    (env / "归档").mkdir()
+    (env / "a.md").rename(env / "归档" / "a-改名.md")   # 移动 + 改名
+    (env / "书").rename(env / "图书")                    # 整个文件夹改名
+    ing.sync()
+    assert status(ing) == {"归档/a-改名.md": ("ok", 1), "图书/b.md": ("ok", 1)}
+    assert ing.store.count() == before
+    paths = {h.path for h in ing.store.doc_chunks(ing.registry.by_path("归档/a-改名.md").doc_id)}
+    assert paths == {"归档/a-改名.md"}
+
+
+def test_moved_and_modified_file_is_reingested(env):
+    (env / "a.md").write_text("旧内容", encoding="utf-8")
+    ing = Ingestor(get_settings())
+    ing.sync()
+    (env / "a.md").unlink()
+    (env / "b.md").write_text("新内容不一样", encoding="utf-8")
+    ing.sync()
+    assert status(ing) == {"b.md": ("ok", 1)}

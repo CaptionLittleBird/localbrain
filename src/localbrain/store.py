@@ -166,6 +166,14 @@ class VectorStore:
         for i in range(0, len(points), 128):
             self.client.upsert(self.collection, points[i : i + 128])
 
+    def move_doc(self, old_doc_id: str, new_doc_id: str, path: str) -> None:
+        """文件移动或改名：只改片段上记的文档 ID 和路径，向量不用重算。"""
+        self.client.set_payload(
+            self.collection,
+            payload={"doc_id": new_doc_id, "path": path},
+            points=models.FilterSelector(filter=_doc_filter(old_doc_id)),
+        )
+
     def delete_doc(self, doc_id: str) -> None:
         self.client.delete(self.collection, points_selector=models.FilterSelector(filter=_doc_filter(doc_id)))
 

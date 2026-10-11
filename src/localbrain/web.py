@@ -1,4 +1,4 @@
-"""文档管理页面 /kb：上传、查看入库状态、删除、重试、在线看原文。
+"""文档管理页面 /kb：按文件夹管理文档（上传、新建文件夹、移动、重命名、删除），查看入库状态，在线看原文。
 
 页面只管文档目录里的文件，入库仍由 watch 服务完成：上传的文件落到 DOCS_DIR 后，watch 自动解析入库；
 删除文件后 watch 自动从向量库移除。
@@ -11,6 +11,7 @@ import hmac
 import html
 import os
 import re
+import shutil
 import uuid
 from pathlib import Path
 from urllib.parse import quote
@@ -108,17 +109,19 @@ def list_docs(request: Request) -> dict:
     """磁盘上的文件和入库记录合在一起看，得出每个文件当前的状态。"""
     docs_dir = _docs_dir()
     records = {r.path: r for r in _registry(request).all()}
-    docs, folders = [], set()
+    found = []
     for path in scan_docs(docs_dir):
-        rel = path.relative_to(docs_dir).as_posix()
         try:
-            stat = path.stat()
+            found.append((path.relative_to(docs_dir).as_posix(), path.stat()))
         except FileNotFoundError:
             continue
-        folder = path.parent.relative_to(docs_dir).as_posix()
-        if folder != ".":
-            folders.add(folder)
-        rec = records.pop(rel, None)
+    on_disk = {rel for rel, _ in found}
+    # 文件已经不在原处的记录。刚移动、改名的文件 watch 还没处理时，按大小和修改时间对上原来的记录，
+    # 照样显示原来的状态，不会闪一下"等待入库"
+    gone = {(r.size, r.mtime): r for p, r in records.items() if p not in on_disk}
+    docs = []
+    for rel, stat in found:
+        rec = records.get(rel) or gone.pop((stat.st_size, stat.st_mtime), None)
         if rec is None or (rec.status != "indexing" and (rec.size, rec.mtime) != (stat.st_size, stat.st_mtime)):
             status = "pending"  # 新文件或改过的文件，等 watch 处理
         else:
@@ -131,12 +134,114 @@ def list_docs(request: Request) -> dict:
             "error": rec.error if rec and status in ("error", "duplicate") else "",
             "updated_at": rec.updated_at if rec else stat.st_mtime,
         })
-    for rec in records.values():  # 文件已删、记录还在：等 watch 从向量库移除
+    for rec in gone.values():  # 文件已删、记录还在：等 watch 从向量库移除
         docs.append({
             "path": rec.path, "size": rec.size, "status": "removing",
             "chunks": 0, "error": "", "updated_at": rec.updated_at,
         })
-    return {"docs": docs, "folders": sorted(folders), "suffixes": sorted(SUPPORTED_SUFFIXES)}
+    return {"docs": docs, "folders": _folders(docs_dir), "suffixes": sorted(SUPPORTED_SUFFIXES)}
+
+
+def _folders(docs_dir: Path) -> list[str]:
+    """所有子文件夹，包括空的。"""
+    out = []
+    for p in docs_dir.rglob("*"):
+        rel = p.relative_to(docs_dir)
+        if p.is_dir() and not any(part.startswith(".") for part in rel.parts):
+            out.append(rel.as_posix())
+    return sorted(out)
+
+
+def _folder(rel: str) -> Path:
+    """文件夹路径，空字符串表示文档目录本身。"""
+    return _docs_dir() if not rel.strip("/ ") else _resolve(rel)
+
+
+def _rel(path: Path) -> str:
+    return path.relative_to(_docs_dir()).as_posix()
+
+
+class NewFolder(BaseModel):
+    path: str
+
+
+@router.post("/api/folders", dependencies=[Depends(require_login)])
+def create_folder(body: NewFolder) -> dict:
+    target = _resolve(body.path)
+    if target.exists():
+        raise HTTPException(409, "已经有同名的文件或文件夹")
+    try:
+        target.mkdir(parents=True)
+    except OSError as e:
+        raise HTTPException(400, f"创建失败：{e}") from e
+    return {"path": _rel(target)}
+
+
+@router.delete("/api/folders", dependencies=[Depends(require_login)])
+def delete_folder(path: str, recursive: bool = False) -> dict:
+    """删除文件夹。里面有文件时要 recursive=true 才删，文件会一起删掉并移出知识库。"""
+    target = _resolve(path)
+    if not target.is_dir():
+        raise HTTPException(404, "文件夹不存在")
+    files = [p for p in target.rglob("*") if p.is_file()]
+    if files and not recursive:
+        raise HTTPException(409, f"文件夹里还有 {len(files)} 个文件")
+    shutil.rmtree(target)
+    return {"deleted_files": len(files)}
+
+
+class Move(BaseModel):
+    paths: list[str]
+    to: str  # 目标文件夹，空字符串是根目录
+
+
+@router.post("/api/move", dependencies=[Depends(require_login)])
+def move(body: Move) -> dict:
+    """把文件或文件夹移到另一个文件夹。内容没变，watch 会认出是移动，不会重新入库。
+
+    先全部检查一遍再动手，有一个不行就都不动。
+    """
+    dest_dir = _folder(body.to)
+    if not dest_dir.is_dir():
+        raise HTTPException(404, "目标文件夹不存在")
+    plan = []
+    for rel in dict.fromkeys(body.paths):
+        src = _resolve(rel)
+        if not src.exists():
+            raise HTTPException(404, f"不存在：{rel}")
+        dest = dest_dir / src.name
+        if src.is_dir() and dest_dir.resolve().is_relative_to(src.resolve()):
+            raise HTTPException(400, f"不能把文件夹移到它自己里面：{rel}")
+        if dest == src:
+            continue
+        if dest.exists():
+            raise HTTPException(409, f"目标文件夹里已经有「{src.name}」")
+        plan.append((src, dest))
+    for src, dest in plan:
+        os.rename(src, dest)
+    return {"moved": [_rel(d) for _, d in plan]}
+
+
+class Rename(BaseModel):
+    path: str
+    name: str
+
+
+@router.post("/api/rename", dependencies=[Depends(require_login)])
+def rename(body: Rename) -> dict:
+    src = _resolve(body.path)
+    if not src.exists():
+        raise HTTPException(404, "不存在")
+    name = body.name.strip()
+    if not name or "/" in name or "\\" in name or name in (".", "..") or is_ignored_name(name):
+        raise HTTPException(400, "名字不合法（不能含 /，不能以 . 或 ~$ 开头）")
+    dest = src.with_name(name)
+    if src.is_file() and dest.suffix.lower() not in SUPPORTED_SUFFIXES:
+        raise HTTPException(400, f"改成 {dest.suffix or '无扩展名'} 就不会入库了，保留原来的扩展名吧")
+    if dest.exists():
+        raise HTTPException(409, "已经有同名的文件或文件夹")
+    os.rename(src, dest)
+    return {"path": _rel(dest)}
 
 
 @router.put("/api/files", dependencies=[Depends(require_login)])

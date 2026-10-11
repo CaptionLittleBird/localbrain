@@ -63,3 +63,38 @@ def test_html_files_are_downloaded_not_rendered(client, env):
     login(client)
     r = client.get("/kb/api/raw?path=page.html")
     assert r.headers["content-disposition"].startswith("attachment")
+
+
+def test_folder_create_move_rename_delete(client, env):
+    login(client)
+    assert client.post("/kb/api/folders", json={"path": "归档/2026"}).status_code == 200
+    assert client.post("/kb/api/folders", json={"path": "归档/2026"}).status_code == 409
+    assert "归档/2026" in client.get("/kb/api/docs").json()["folders"]  # 空文件夹也列出来
+
+    # 移动文件到文件夹；文件夹不能移到自己里面；目标重名时整批都不动
+    assert client.post("/kb/api/move", json={"paths": ["书/笔记.md"], "to": "归档/2026"}).status_code == 200
+    assert (env / "归档" / "2026" / "笔记.md").exists()
+    assert client.post("/kb/api/move", json={"paths": ["归档"], "to": "归档/2026"}).status_code == 400
+    (env / "书" / "笔记.md").write_text("同名", encoding="utf-8")
+    (env / "书" / "另一篇.md").write_text("x", encoding="utf-8")
+    r = client.post("/kb/api/move", json={"paths": ["书/另一篇.md", "书/笔记.md"], "to": "归档/2026"})
+    assert r.status_code == 409 and (env / "书" / "另一篇.md").exists()
+
+    # 重命名：不能改成不支持的扩展名、不能带 /
+    assert client.post("/kb/api/rename", json={"path": "归档/2026/笔记.md", "name": "笔记.exe"}).status_code == 400
+    assert client.post("/kb/api/rename", json={"path": "归档/2026/笔记.md", "name": "a/b.md"}).status_code == 400
+    assert client.post("/kb/api/rename", json={"path": "归档", "name": "旧资料"}).status_code == 200
+    assert (env / "旧资料" / "2026" / "笔记.md").exists()
+
+    # 删除非空文件夹要确认
+    r = client.delete(f"/kb/api/folders?path={quote('旧资料')}")
+    assert r.status_code == 409 and "1 个文件" in r.json()["detail"]
+    assert client.delete(f"/kb/api/folders?path={quote('旧资料')}&recursive=true").json() == {"deleted_files": 1}
+    assert not (env / "旧资料").exists()
+
+
+def test_moved_file_keeps_status_before_watch_runs(client, env):
+    login(client)
+    client.post("/kb/api/move", json={"paths": ["书/笔记.md"], "to": ""})
+    docs = client.get("/kb/api/docs").json()["docs"]
+    assert [(d["path"], d["status"]) for d in docs] == [("笔记.md", "ok")]
